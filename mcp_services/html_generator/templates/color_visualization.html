@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>古画色彩3D可视化分析</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23f8f3e6"/><path d="M0,50 Q25,30 50,50 T100,50" fill="none" stroke="%23e8d9c5" stroke-width="0.5" opacity="0.3"/></svg>');
+            color: #5c3d2e;
+            min-height: 100vh;
+            padding: 20px;
+            font-family: 'Noto Serif SC', serif;
+            position: relative;
+            overflow-x: hidden;
+        }
+        
+        body:before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><path d="M40,40 C60,20 80,30 100,40 C120,50 140,60 160,50 C180,40 180,20 160,20 C140,20 120,40 100,50 C80,60 60,70 40,60 C20,50 20,60 40,40 Z" fill="none" stroke="%23d9c6a7" stroke-width="1" opacity="0.1"/></svg>');
+            z-index: -1;
+            opacity: 0.15;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 25px 0;
+            background: rgba(248, 243, 230, 0.85);
+            border-radius: 12px;
+            border: 1px solid #d9c6a7;
+            box-shadow: 0 5px 20px rgba(92, 61, 46, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        header:before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, #c3272b, #d9751e, #d9b336, #2a8e55, #1a6a9b, #5d3d79);
+            z-index: 1;
+        }
+        
+        h1 {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 3.5rem;
+            color: #8c2f2f;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(140, 47, 47, 0.2);
+            letter-spacing: 3px;
+        }
+        
+        .subtitle {
+            font-size: 1.3rem;
+            color: #7d5d47;
+            max-width: 800px;
+            margin: 0 auto 15px;
+            line-height: 1.7;
+            position: relative;
+        }
+        
+        .subtitle:after {
+            content: "";
+            display: block;
+            width: 100px;
+            height: 2px;
+            background: #c3272b;
+            margin: 15px auto;
+            opacity: 0.6;
+        }
+        
+        .content-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 25px;
+        }
+        
+        .input-section {
+            flex: 1;
+            min-width: 300px;
+            background: rgba(248, 243, 230, 0.85);
+            border-radius: 12px;
+            padding: 25px;
+            border: 1px solid #d9c6a7;
+            box-shadow: 0 5px 20px rgba(92, 61, 46, 0.1);
+            position: relative;
+        }
+        
+        .input-section:before {
+            content: "";
+            position: absolute;
+            top: 15px;
+            bottom: 15px;
+            left: 10px;
+            width: 5px;
+            background: #c3272b;
+            border-radius: 3px;
+            opacity: 0.7;
+        }
+        
+        .chart-section {
+            flex: 2;
+            min-width: 500px;
+            background: rgba(248, 243, 230, 0.85);
+            border-radius: 12px;
+            padding: 25px;
+            border: 1px solid #d9c6a7;
+            box-shadow: 0 5px 20px rgba(92, 61, 46, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            position: relative;
+        }
+        
+        .section-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.8rem;
+            color: #5c3d2e;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #d9c6a7;
+            position: relative;
+        }
+        
+        .section-title:after {
+            content: "❧";
+            position: absolute;
+            right: 0;
+            bottom: -5px;
+            color: #c3272b;
+            font-size: 1.5rem;
+        }
+        
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 15px;
+            border: 1px solid #d9c6a7;
+            border-radius: 8px;
+            font-size: 1rem;
+            resize: vertical;
+            transition: all 0.3s;
+            background: #fefdf9;
+            font-family: 'Noto Serif SC', serif;
+            color: #5c3d2e;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #c3272b;
+            box-shadow: 0 0 0 3px rgba(195, 39, 43, 0.1);
+        }
+        
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 8px rgba(92, 61, 46, 0.15);
+            font-family: 'Noto Serif SC', serif;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        button:before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: 0.5s;
+        }
+        
+        button:hover:before {
+            left: 100%;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(to right, #8c2f2f, #c3272b);
+            color: #fff5e6;
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(to right, #2a8e55, #3caa6d);
+            color: #fff5e6;
+        }
+        
+        .btn-warning {
+            background: linear-gradient(to right, #d9751e, #e88a2a);
+            color: #fff5e6;
+        }
+        
+        .btn-info {
+            background: linear-gradient(to right, #1a6a9b, #2a8bc5);
+            color: #fff5e6;
+        }
+        
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(92, 61, 46, 0.25);
+        }
+        
+        button:active {
+            transform: translateY(1px);
+        }
+        
+        .slider-container {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f5eee1;
+            border-radius: 8px;
+            border: 1px dashed #d9c6a7;
+        }
+        
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: #5c3d2e;
+            font-size: 1.1rem;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 10px;
+            border-radius: 5px;
+            background: linear-gradient(to right, #d9c6a7, #c3272b);
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #5c3d2e;
+            border: 2px solid #d9c6a7;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(92, 61, 46, 0.3);
+        }
+        
+        #colorChart {
+            width: 100%;
+            height: 600px;
+            background: #fefdf9;
+            border-radius: 8px;
+            box-shadow: inset 0 0 10px rgba(217, 198, 167, 0.5);
+            border: 1px solid #d9c6a7;
+        }
+        
+        .color-info {
+            background: #f5eee1;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #d9c6a7;
+            box-shadow: 0 3px 10px rgba(92, 61, 46, 0.08);
+        }
+        
+        .info-header {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            color: #5c3d2e;
+            position: relative;
+            display: inline-block;
+        }
+        
+        .info-header:after {
+            content: "";
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, #c3272b, #d9751e, #2a8e55, #1a6a9b);
+            opacity: 0.7;
+        }
+        
+        .color-preview {
+            width: 100%;
+            height: 70px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 1px solid #d9c6a7;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .color-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 15px;
+        }
+        
+        .detail-item {
+            background: rgba(248, 243, 230, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #d9c6a7;
+        }
+        
+        .detail-label {
+            font-size: 0.9rem;
+            color: #8c2f2f;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        
+        .detail-value {
+            font-weight: 600;
+            color: #5c3d2e;
+            font-size: 1.1rem;
+        }
+        
+        .legend {
+            display: flex;
+            gap: 25px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.05rem;
+        }
+        
+        .legend-marker {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid #f8f3e6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .legend-db {
+            background: #1a6a9b;
+        }
+        
+        .legend-user {
+            background: #c3272b;
+        }
+        
+        .classic-border {
+            position: absolute;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .border-top-left {
+            top: 15px;
+            left: 15px;
+            width: 50px;
+            height: 50px;
+            border-top: 3px solid #c3272b;
+            border-left: 3px solid #c3272b;
+        }
+        
+        .border-top-right {
+            top: 15px;
+            right: 15px;
+            width: 50px;
+            height: 50px;
+            border-top: 3px solid #c3272b;
+            border-right: 3px solid #c3272b;
+        }
+        
+        .border-bottom-left {
+            bottom: 15px;
+            left: 15px;
+            width: 50px;
+            height: 50px;
+            border-bottom: 3px solid #c3272b;
+            border-left: 3px solid #c3272b;
+        }
+        
+        .border-bottom-right {
+            bottom: 15px;
+            right: 15px;
+            width: 50px;
+            height: 50px;
+            border-bottom: 3px solid #c3272b;
+            border-right: 3px solid #c3272b;
+        }
+        
+        .floral-corner {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M20,20 Q40,5 60,20 T100,20" fill="none" stroke="%23c3272b" stroke-width="2" stroke-opacity="0.5"/></svg>');
+            opacity: 0.4;
+            z-index: 5;
+        }
+        
+        .corner-tl { top: 10px; left: 10px; transform: rotate(0deg); }
+        .corner-tr { top: 10px; right: 10px; transform: rotate(90deg); }
+        .corner-bl { bottom: 10px; left: 10px; transform: rotate(270deg); }
+        .corner-br { bottom: 10px; right: 10px; transform: rotate(180deg); }
+        
+        @media (max-width: 900px) {
+            .content-wrapper {
+                flex-direction: column;
+            }
+            
+            .input-section, .chart-section {
+                min-width: 100%;
+            }
+            
+            h1 {
+                font-size: 2.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 古典装饰元素 -->
+    <div class="classic-border border-top-left"></div>
+    <div class="classic-border border-top-right"></div>
+    <div class="classic-border border-bottom-left"></div>
+    <div class="classic-border border-bottom-right"></div>
+    
+    <div class="floral-corner corner-tl"></div>
+    <div class="floral-corner corner-tr"></div>
+    <div class="floral-corner corner-bl"></div>
+    <div class="floral-corner corner-br"></div>
+    
+    <div class="container">
+        <header>
+            <h1>古画色彩3D可视化分析</h1>
+            <p class="subtitle">输入从古画中提取的主要颜色数据，系统将自动在对应色系中选择代表性颜色，生成交互式3D散点图进行分析</p>
+        </header>
+        
+        <div class="content-wrapper">
+            <div class="input-section">
+                <h2 class="section-title">输入颜色数据</h2>
+                <p>请粘贴从古画中提取的颜色数据（格式：中文名 拼音 英文译名 HEX RGB 来源 色系）：</p>
+                <textarea id="colorInput" placeholder="示例：
+朱砂	zhū shā	Cinnabar Red	#E34234	[227, 66, 52]	矿物	红色系
+胭脂红	yān zhī hóng	Rouge Red	#D95030	[217, 80, 48]	植物	红色系
+妃色	fēi sè	Consort Pink	#ED5736	[237, 87, 54]	植物	红色系
+灯笼红	dēng lóng hóng	Lantern Red	#F14336	[241, 67, 54]	矿物	橙色系
+松花绿	sōng huā lǜ	Pine Flower Green	#7EB26D	[126, 178, 109]	植物	绿色系
+竹青	zhú qīng	Bamboo Blue	#4C8C6B	[76, 140, 107]	植物	绿色系
+湖蓝	hú lán	Lake Blue	#30B4D9	[48, 180, 217]	人工	蓝色系"></textarea>
+                
+                <div class="btn-group">
+                    <button id="generateBtn" class="btn-primary">
+                        <i class="fas fa-paint-brush"></i> 生成3D散点图
+                    </button>
+                    <button id="exampleBtn" class="btn-secondary">
+                        <i class="fas fa-history"></i> 加载示例数据
+                    </button>
+                </div>
+                
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-marker legend-db"></div>
+                        <span>数据库颜色</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-marker legend-user"></div>
+                        <span>用户输入颜色</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chart-section">
+                <h2 class="section-title">3D色彩空间分析</h2>
+                
+                <div id="colorChart"></div>
+                
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>点大小调节</span>
+                        <span id="sizeValue">8</span>
+                    </div>
+                    <input type="range" id="sizeSlider" min="3" max="15" value="8">
+                </div>
+                
+                <div class="btn-group">
+                    <button id="resetViewBtn" class="btn-warning">
+                        <i class="fas fa-sync-alt"></i> 重置视角
+                    </button>
+                    <button id="downloadBtn" class="btn-info">
+                        <i class="fas fa-download"></i> 下载PNG图片
+                    </button>
+                </div>
+                
+                <div class="color-info">
+                    <div class="info-header">颜色详细信息</div>
+                    <p id="infoPlaceholder">点击图表中的点查看颜色详情</p>
+                    <div id="colorDetails" style="display: none;">
+                        <div class="color-preview" id="colorPreview"></div>
+                        <div class="color-details">
+                            <div class="detail-item">
+                                <div class="detail-label">中文名称</div>
+                                <div class="detail-value" id="infoName"></div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">HEX值</div>
+                                <div class="detail-value" id="infoHex"></div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">RGB值</div>
+                                <div class="detail-value" id="infoRgb"></div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">来源</div>
+                                <div class="detail-value" id="infoSource"></div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">色系</div>
+                                <div class="detail-value" id="infoGroup"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 古画色彩数据库（按色系分类）
+        const colorDatabase = {
+            "红色系": [
+                {name: "朱砂", hex: "#E34234", rgb: [227, 66, 52], source: "矿物"},
+                {name: "胭脂红", hex: "#D95030", rgb: [217, 80, 48], source: "植物"},
+                {name: "妃色", hex: "#ED5736", rgb: [237, 87, 54], source: "植物"},
+                {name: "大红", hex: "#C83C23", rgb: [200, 60, 35], source: "矿物"},
+                {name: "绛紫", hex: "#922B21", rgb: [146, 43, 33], source: "矿物"},
+                {name: "珊瑚红", hex: "#FF6B61", rgb: [255, 107, 97], source: "植物"},
+                {name: "丹", hex: "#E84A4A", rgb: [232, 74, 74], source: "矿物"},
+                {name: "绯红", hex: "#F53B3B", rgb: [245, 59, 59], source: "植物"},
+                {name: "海棠红", hex: "#DB5A6B", rgb: [219, 90, 107], source: "植物"},
+                {name: "石榴红", hex: "#F20C00", rgb: [242, 12, 0], source: "植物"}
+            ],
+            "橙色系": [
+                {name: "橙黄", hex: "#F2994A", rgb: [242, 153, 74], source: "矿物"},
+                {name: "杏黄", hex: "#F7BE79", rgb: [247, 190, 121], source: "植物"},
+                {name: "橘黄", hex: "#F5A623", rgb: [245, 166, 35], source: "植物"},
+                {name: "橙红", hex: "#FF5A36", rgb: [255, 90, 54], source: "矿物"},
+                {name: "赤橙", hex: "#FF4D00", rgb: [255, 77, 0], source: "矿物"},
+                {name: "琥珀色", hex: "#CA6924", rgb: [202, 105, 36], source: "矿物"},
+                {name: "焦橙", hex: "#DE6200", rgb: [222, 98, 0], source: "矿物"},
+                {name: "灯笼红", hex: "#F14336", rgb: [241, 67, 54], source: "矿物"},
+                {name: "柿红", hex: "#F35936", rgb: [243, 89, 54], source: "植物"},
+                {name: "朱红", hex: "#F04E23", rgb: [240, 78, 35], source: "矿物"}
+            ],
+            "黄色系": [
+                {name: "鹅黄", hex: "#FFFACD", rgb: [255, 250, 205], source: "植物"},
+                {name: "米黄", hex: "#F9E79F", rgb: [249, 231, 159], source: "植物"},
+                {name: "淡黄", hex: "#FFF9E3", rgb: [255, 249, 227], source: "人工"},
+                {name: "柠檬黄", hex: "#FFF44F", rgb: [255, 244, 79], source: "植物"},
+                {name: "秋香色", hex: "#D4B45F", rgb: [212, 180, 95], source: "植物"},
+                {name: "金黄", hex: "#FFC64B", rgb: [255, 198, 75], source: "矿物"},
+                {name: "明黄", hex: "#FDD000", rgb: [253, 208, 0], source: "矿物"},
+                {name: "土黄", hex: "#D2B25B", rgb: [210, 178, 91], source: "矿物"},
+                {name: "蜜黄", hex: "#FCE2AE", rgb: [252, 226, 174], source: "植物"},
+                {name: "栀子黄", hex: "#FFD400", rgb: [255, 212, 0], source: "植物"}
+            ],
+            "绿色系": [
+                {name: "石绿", hex: "#43B29D", rgb: [67, 178, 157], source: "矿物"},
+                {name: "艾绿", hex: "#A8BBA5", rgb: [168, 187, 165], source: "植物"},
+                {name: "青黛", hex: "#3D8273", rgb: [61, 130, 115], source: "植物"},
+                {name: "柳绿", hex: "#9ACD32", rgb: [154, 205, 50], source: "植物"},
+                {name: "碧绿", hex: "#00A86B", rgb: [0, 168, 107], source: "矿物"},
+                {name: "草绿", hex: "#7CFC00", rgb: [124, 252, 0], source: "植物"},
+                {name: "苍绿", hex: "#32814B", rgb: [50, 129, 75], source: "矿物"},
+                {name: "翡翠绿", hex: "#3DE1AD", rgb: [61, 225, 173], source: "矿物"},
+                {name: "松柏绿", hex: "#2B5D34", rgb: [43, 93, 52], source: "植物"},
+                {name: "苔绿", hex: "#2E8B57", rgb: [46, 139, 87], source: "植物"}
+            ],
+            "蓝色系": [
+                {name: "石青", hex: "#317EB9", rgb: [49, 126, 185], source: "矿物"},
+                {name: "靛青", hex: "#1661AB", rgb: [22, 97, 171], source: "植物"},
+                {name: "湖蓝", hex: "#30B4D9", rgb: [48, 180, 217], source: "人工"},
+                {name: "天青", hex: "#73C2FB", rgb: [115, 194, 251], source: "矿物"},
+                {name: "宝蓝", hex: "#4169E1", rgb: [65, 105, 225], source: "人工"},
+                {name: "蔚蓝", hex: "#007BA7", rgb: [0, 123, 167], source: "人工"},
+                {name: "靛蓝", hex: "#4B0082", rgb: [75, 0, 130], source: "植物"},
+                {name: "宝石蓝", hex: "#0F52BA", rgb: [15, 82, 186], source: "矿物"},
+                {name: "水蓝", hex: "#A2D2E2", rgb: [162, 210, 226], source: "人工"},
+                {name: "钴蓝", hex: "#0047AB", rgb: [0, 71, 171], source: "矿物"}
+            ],
+            "紫色系": [
+                {name: "紫檀", hex: "#4D1A7F", rgb: [77, 26, 127], source: "植物"},
+                {name: "葡萄紫", hex: "#7D5284", rgb: [125, 82, 132], source: "植物"},
+                {name: "暮山紫", hex: "#7D5886", rgb: [125, 88, 134], source: "人工"},
+                {name: "紫水晶", hex: "#A398C2", rgb: [163, 152, 194], source: "矿物"},
+                {name: "罗兰紫", hex: "#9F87B7", rgb: [159, 135, 183], source: "植物"},
+                {name: "紫罗兰", hex: "#B497BD", rgb: [180, 151, 189], source: "植物"},
+                {name: "兰花紫", hex: "#A084B1", rgb: [160, 132, 177], source: "植物"},
+                {name: "紫玉", hex: "#A66CB4", rgb: [166, 108, 180], source: "矿物"},
+                {name: "紫藤", hex: "#C2A1C2", rgb: [194, 161, 194], source: "植物"},
+                {name: "黛紫", hex: "#4D305E", rgb: [77, 48, 94], source: "矿物"}
+            ],
+            "灰色系": [
+                {name: "螺灰", hex: "#8A8C8E", rgb: [138, 140, 142], source: "矿物"},
+                {name: "瓦灰", hex: "#9D9D9D", rgb: [157, 157, 157], source: "人工"},
+                {name: "云母灰", hex: "#C4D7D6", rgb: [196, 215, 214], source: "人工"},
+                {name: "铅灰", hex: "#7F7F7F", rgb: [127, 127, 127], source: "矿物"},
+                {name: "青灰", hex: "#9CAEBB", rgb: [156, 174, 187], source: "人工"},
+                {name: "亮灰", hex: "#D3D3D3", rgb: [211, 211, 211], source: "人工"},
+                {name: "松灰", hex: "#9BA2A6", rgb: [155, 162, 166], source: "植物"},
+                {name: "钨灰", hex: "#85885", rgb: [133, 133, 133], source: "金属"},
+                {name: "鼠背灰", hex: "#3E3E3E", rgb: [62, 62, 62], source: "人工"},
+                {name: "岩灰", hex: "#888B8D", rgb: [136, 139, 141], source: "矿物"}
+            ],
+            "黑色系": [
+                {name: "墨黑", hex: "#0C0C0C", rgb: [12, 12, 12], source: "矿物"},
+                {name: "煤精黑", hex: "#2D2E2C", rgb: [45, 46, 44], source: "矿物"},
+                {name: "鸦雏黑", hex: "#161823", rgb: [22, 24, 35], source: "人工"},
+                {name: "漆黑", hex: "#1A1A1A", rgb: [26, 26, 26], source: "人工"},
+                {name: "乌黑", hex: "#0F0F0F", rgb: [15, 15, 15], source: "植物"},
+                {name: "铁黑", hex: "#212121", rgb: [33, 33, 33], source: "矿物"},
+                {name: "黑曜", hex: "#0D0D0D", rgb: [13, 13, 13], source: "矿物"},
+                {name: "墨玉黑", hex: "#1B1B1B", rgb: [27, 27, 27], source: "矿物"},
+                {name: "碳灰黑", hex: "#373737", rgb: [55, 55, 55], source: "矿物"},
+                {name: "铸铁黑", hex: "#232323", rgb: [35, 35, 35], source: "矿物"}
+            ],
+            "白色系": [
+                {name: "银白", hex: "#E9F1F6", rgb: [233, 241, 246], source: "矿物"},
+                {name: "月白", hex: "#D6E4F6", rgb: [214, 228, 246], source: "人工"},
+                {name: "象牙白", hex: "#FFFCEB", rgb: [255, 252, 235], source: "人工"},
+                {name: "雪白", hex: "#FFFFFF", rgb: [255, 255, 255], source: "自然"},
+                {name: "铅白", hex: "#F8F8FF", rgb: [248, 248, 255], source: "矿物"},
+                {name: "缟素", hex: "#F6F6F6", rgb: [246, 246, 246], source: "人工"},
+                {name: "米白", hex: "#F5F5DC", rgb: [245, 245, 220], source: "人工"},
+                {name: "珍珠白", hex: "#F3F0E7", rgb: [243, 240, 231], source: "矿物"},
+                {name: "羊脂白", hex: "#F5F3EA", rgb: [245, 243, 234], source: "矿物"},
+                {name: "棉白", hex: "#F5F5F5", rgb: [245, 245, 245], source: "自然"}
+            ],
+            "棕色系": [
+                {name: "赭石", hex: "#A0522D", rgb: [160, 82, 45], source: "矿物"},
+                {name: "栗色", hex: "#7B3F00", rgb: [123, 63, 0], source: "植物"},
+                {name: "褐色", hex: "#7F462C", rgb: [127, 70, 44], source: "矿物"},
+                {name: "驼色", hex: "#C19A6B", rgb: [193, 154, 107], source: "植物"},
+                {name: "焦茶", hex: "#6E4B3A", rgb: [110, 75, 58], source: "植物"},
+                {name: "琥珀色", hex: "#CA6924", rgb: [202, 105, 36], source: "矿物"},
+                {name: "古铜色", hex: "#B87333", rgb: [184, 115, 51], source: "矿物"},
+                {name: "咖啡色", hex: "#4B3621", rgb: [75, 54, 33], source: "植物"},
+                {name: "焦糖色", hex: "#A97142", rgb: [169, 113, 66], source: "植物"},
+                {name: "橡木棕", hex: "#A0522D", rgb: [160, 82, 45], source: "植物"}
+            ]
+        };
+
+        // 将RGB转换为HSV
+        function rgbToHsv(r, g, b) {
+            r /= 255, g /= 255, b /= 255;
+            let max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, v = max;
+            let d = max - min;
+            s = max === 0 ? 0 : d / max;
+            
+            if (max === min) {
+                h = 0;
+            } else {
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+            
+            return [h * 360, s * 100, v * 100];
+        }
+
+        // 解析用户输入的颜色数据
+        function parseColorData(input) {
+            const lines = input.trim().split('\n');
+            const colors = [];
+            
+            for (const line of lines) {
+                const parts = line.trim().split('\t');
+                if (parts.length < 7) continue;
+                
+                // 处理RGB数组
+                const rgbStr = parts[4].replace(/[\[\]]/g, '');
+                const rgb = rgbStr.split(',').map(num => parseInt(num.trim()));
+                
+                colors.push({
+                    name: parts[0],
+                    pinyin: parts[1],
+                    nameEn: parts[2],
+                    hex: parts[3],
+                    rgb: rgb,
+                    source: parts[5],
+                    group: parts[6]
+                });
+            }
+            
+            return colors;
+        }
+
+        // 生成3D散点图
+        function generateChart(userColors) {
+            // 收集所有需要显示的颜色
+            const dbColors = [];
+            const userPoints = [];
+            const groups = new Set();
+            
+            // 添加用户输入的颜色
+            userColors.forEach(color => {
+                const [h, s, v] = rgbToHsv(...color.rgb);
+                groups.add(color.group);
+                
+                userPoints.push({
+                    x: h,
+                    y: s,
+                    z: v,
+                    name: color.name,
+                    hex: color.hex,
+                    rgb: color.rgb,
+                    source: color.source,
+                    group: color.group,
+                    type: 'user'
+                });
+            });
+            
+            // 添加数据库中的颜色
+            groups.forEach(group => {
+                if (colorDatabase[group]) {
+                    colorDatabase[group].forEach(color => {
+                        const [h, s, v] = rgbToHsv(...color.rgb);
+                        
+                        dbColors.push({
+                            x: h,
+                            y: s,
+                            z: v,
+                            name: color.name,
+                            hex: color.hex,
+                            rgb: color.rgb,
+                            source: color.source,
+                            group: group,
+                            type: 'database'
+                        });
+                    });
+                }
+            });
+            
+            // 创建数据库颜色轨迹
+            const dbTrace = {
+                x: dbColors.map(c => c.x),
+                y: dbColors.map(c => c.y),
+                z: dbColors.map(c => c.z),
+                mode: 'markers',
+                type: 'scatter3d',
+                name: '数据库颜色',
+                marker: {
+                    size: 8,
+                    color: dbColors.map(c => c.hex),
+                    symbol: 'circle',
+                    line: {
+                        color: 'rgba(0,0,0,0.3)',
+                        width: 1
+                    },
+                    opacity: 0.9
+                },
+                hoverinfo: 'text',
+                text: dbColors.map(c => `${c.name}<br>${c.hex}<br>${c.group}`),
+                customdata: dbColors
+            };
+            
+            // 创建用户颜色轨迹
+            const userTrace = {
+                x: userPoints.map(c => c.x),
+                y: userPoints.map(c => c.y),
+                z: userPoints.map(c => c.z),
+                mode: 'markers',
+                type: 'scatter3d',
+                name: '用户输入颜色',
+                marker: {
+                    size: 10,
+                    color: userPoints.map(c => c.hex),
+                    symbol: 'star',
+                    line: {
+                        color: 'rgba(0,0,0,0.5)',
+                        width: 1.5
+                    },
+                    opacity: 1
+                },
+                hoverinfo: 'text',
+                text: userPoints.map(c => `${c.name}<br>${c.hex}<br>${c.group}`),
+                customdata: userPoints
+            };
+            
+            // 图表布局
+            const layout = {
+                title: '古画色彩3D空间分布',
+                titlefont: {
+                    family: 'Ma Shan Zheng, cursive',
+                    size: 24,
+                    color: '#5c3d2e'
+                },
+                scene: {
+                    xaxis: { 
+                        title: '色相 (Hue)',
+                        titlefont: { size: 14 }
+                    },
+                    yaxis: { 
+                        title: '饱和度 (Saturation)',
+                        titlefont: { size: 14 }
+                    },
+                    zaxis: { 
+                        title: '明度 (Value)',
+                        titlefont: { size: 14 }
+                    },
+                    camera: {
+                        eye: { x: 1.5, y: 1.5, z: 1.5 }
+                    },
+                    bgcolor: '#fefdf9'
+                },
+                margin: { l: 0, r: 0, b: 0, t: 60 },
+                height: 600,
+                legend: {
+                    x: 0.8,
+                    y: 0.9,
+                    font: {
+                        family: 'Noto Serif SC, serif',
+                        size: 14
+                    }
+                },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)'
+            };
+            
+            // 绘制图表
+            Plotly.newPlot('colorChart', [dbTrace, userTrace], layout);
+            
+            // 添加点击事件
+            document.getElementById('colorChart').on('plotly_click', function(data) {
+                const point = data.points[0].customdata;
+                showColorDetails(point);
+            });
+        }
+        
+        // 显示颜色详情
+        function showColorDetails(color) {
+            document.getElementById('infoPlaceholder').style.display = 'none';
+            document.getElementById('colorDetails').style.display = 'block';
+            
+            document.getElementById('infoName').textContent = color.name;
+            document.getElementById('infoHex').textContent = color.hex;
+            document.getElementById('infoRgb').textContent = `[${color.rgb.join(', ')}]`;
+            document.getElementById('infoSource').textContent = color.source;
+            document.getElementById('infoGroup').textContent = color.group;
+            
+            const preview = document.getElementById('colorPreview');
+            preview.style.backgroundColor = color.hex;
+        }
+        
+        // 重置视角
+        function resetView() {
+            Plotly.relayout('colorChart', {
+                'scene.camera': { eye: { x: 1.5, y: 1.5, z: 1.5 } }
+            });
+        }
+        
+        // 下载PNG
+        function downloadPNG() {
+            Plotly.downloadImage('colorChart', {
+                format: 'png',
+                width: 1200,
+                height: 800,
+                filename: '古画色彩分析'
+            });
+        }
+        
+        // 初始化页面
+        document.addEventListener('DOMContentLoaded', function() {
+            // 生成按钮事件
+            document.getElementById('generateBtn').addEventListener('click', function() {
+                const input = document.getElementById('colorInput').value;
+                if (!input.trim()) {
+                    alert('请输入颜色数据');
+                    return;
+                }
+                
+                const userColors = parseColorData(input);
+                if (userColors.length === 0) {
+                    alert('未解析到有效的颜色数据，请检查格式');
+                    return;
+                }
+                
+                generateChart(userColors);
+            });
+            
+            // 示例数据按钮
+            document.getElementById('exampleBtn').addEventListener('click', function() {
+                document.getElementById('colorInput').value = 
+                    "朱砂\tzhū shā\tCinnabar Red\t#E34234\t[227, 66, 52]\t矿物\t红色系\n" +
+                    "胭脂红\tyān zhī hóng\tRouge Red\t#D95030\t[217, 80, 48]\t植物\t红色系\n" +
+                    "妃色\tfēi sè\tConsort Pink\t#ED5736\t[237, 87, 54]\t植物\t红色系\n" +
+                    "灯笼红\tdēng lóng hóng\tLantern Red\t#F14336\t[241, 67, 54]\t矿物\t橙色系\n" +
+                    "松花绿\tsōng huā lǜ\tPine Flower Green\t#7EB26D\t[126, 178, 109]\t植物\t绿色系\n" +
+                    "竹青\tzhú qīng\tBamboo Blue\t#4C8C6B\t[76, 140, 107]\t植物\t绿色系\n" +
+                    "湖蓝\thú lán\tLake Blue\t#30B4D9\t[48, 180, 217]\t人工\t蓝色系";
+            });
+            
+            // 重置视角按钮
+            document.getElementById('resetViewBtn').addEventListener('click', resetView);
+            
+            // 下载按钮
+            document.getElementById('downloadBtn').addEventListener('click', downloadPNG);
+            
+            // 点大小滑块
+            const sizeSlider = document.getElementById('sizeSlider');
+            const sizeValue = document.getElementById('sizeValue');
+            
+            sizeSlider.addEventListener('input', function() {
+                const size = parseInt(this.value);
+                sizeValue.textContent = size;
+                
+                Plotly.restyle('colorChart', {
+                    'marker.size': [size - 2, size] // 数据库点稍小，用户点大小
+                }, [0, 1]);
+            });
+        });
+    </script>
+</body>
+</html>

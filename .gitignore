@@ -22,6 +22,12 @@ dist/
 *.log
 *.tmp
 
+# Python bytecode
+__pycache__/
+*.pyc
+
 # Local datasets and runtime outputs
+.venv/
 results/
 runs/
+

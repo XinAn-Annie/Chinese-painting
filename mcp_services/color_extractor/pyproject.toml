@@ -1,0 +1,16 @@
+[project]
+name = "mcp-server-color-extractor"
+version = "0.1.0"
+description = "MCP server for extracting dominant colors from images"
+authors = [{ name = "Your Name" }]
+dependencies = [
+    "fastmcp>=1.2.0",
+    "opencv-python",
+    "numpy",
+    "scikit-learn",
+    "requests"
+]
+requires-python = ">=3.10"
+
+[project.scripts]
+mcp-server-color-extractor = "color_extractor:main"

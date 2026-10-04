@@ -1,0 +1,4 @@
+paddleocr>=3.0,<4
+paddlepaddle>=3.0,<4
+flask>=3.0,<4
+flask-cors>=4.0,<6
