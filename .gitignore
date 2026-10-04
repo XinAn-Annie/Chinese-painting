@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+build/
+dist/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+
+# Secrets and local settings
+.env
+*.key
+*API_Key*
+*API-Key*
+
+# Temporary files
+*.log
+*.tmp
+
+# Local datasets and runtime outputs
+results/
+runs/
