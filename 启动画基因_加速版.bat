@@ -3,13 +3,12 @@ setlocal
 cd /d "%~dp0"
 chcp 65001 >nul
 
-rem Use a mainland PyPI mirror and increase retry/parallel download settings.
-rem If the accelerated run fails, retry once with the official PyPI index.
+rem Measure several PyPI indexes and automatically use the fastest reachable one.
 set "PYTHONUTF8=1"
 set "PYTHONUNBUFFERED=1"
-set "PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/"
-set "PIP_DEFAULT_TIMEOUT=180"
-set "PIP_RETRIES=8"
+set "ZHIHUA_AUTO_PIP_INDEX=1"
+set "PIP_DEFAULT_TIMEOUT=90"
+set "PIP_RETRIES=3"
 set "PIP_DISABLE_PIP_VERSION_CHECK=1"
 set "MODELSCOPE_ENDPOINT=https://www.modelscope.cn"
 set "MODELSCOPE_DOWNLOAD_PARALLELS=4"
@@ -33,19 +32,8 @@ if errorlevel 1 goto no_python
 set "PYTHON_LAUNCHER=python"
 
 :run_accelerated
-echo [Accelerated] PyPI mirror: %PIP_INDEX_URL%
+echo [Accelerated] PyPI source: automatic latency test
 echo [Accelerated] ModelScope parallel streams: %MODELSCOPE_DOWNLOAD_PARALLELS%
-if "%PYTHON_LAUNCHER%"=="py" (
-    py -3 run_local.py
-) else (
-    python run_local.py
-)
-set "launch_exit=%errorlevel%"
-if "%launch_exit%"=="0" goto finish
-
-echo.
-echo [Fallback] Accelerated startup failed. Retrying once with official PyPI...
-set "PIP_INDEX_URL=https://pypi.org/simple"
 if "%PYTHON_LAUNCHER%"=="py" (
     py -3 run_local.py
 ) else (
@@ -66,4 +54,3 @@ if not "%launch_exit%"=="0" (
     pause
 )
 exit /b %launch_exit%
-
