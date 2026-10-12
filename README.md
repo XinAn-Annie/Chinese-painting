@@ -92,4 +92,3 @@ python mcp_services/ocr/paddle_ocr_adapter.py path/to/painting.jpg -o ocr_result
 
 ## 贡献说明
 
-本项目的界面、交互流程和网页原型由作者独立完成。后续公开版本会继续补充运行说明、截图和实验边界。
