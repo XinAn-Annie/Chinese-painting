@@ -4,7 +4,7 @@
 
 ## 安装
 
-建议在独立虚拟环境中安装。模型权重由 PaddleOCR 首次运行时下载，不会提交到 GitHub。
+普通用户直接双击项目根目录的 `启动画基因_Google.bat` 或 `启动画基因_Edge.bat`；启动器会创建独立虚拟环境并安装依赖。PaddleOCR 模型权重由首次识别自动下载，不会提交到 GitHub。
 
 ```bash
 pip install -r requirements.txt

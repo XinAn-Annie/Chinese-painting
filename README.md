@@ -10,13 +10,43 @@
 - 传统色数据库匹配
 - 中文色名、拼音、英文名、HEX 与 RGB 信息展示
 - Plotly 三维颜色空间可视化
-- 浏览器端题跋 OCR、文字框和词云
-- 基于红色区域的印章位置热力图
-- 基于明暗、边缘、饱和度和留白线索的实验性技法倾向分析；以五轴雷达图显示白描、工笔、写意、泼墨、没骨的独立指数，并结合领先倾向给出小分类参考。技法允许交叉，指数不代表画作中实际占比
+- 本地题跋区域检测、PaddleOCR、原图文字框和词云
+- 三级印章候选检测、原图分阶段标注和 `24 × 16` 概率矩阵
+- 本地国画赏析入口：使用 `Qwen2.5-VL-3B-Instruct` 直接读取画面，默认不连接知识库；模型回答后仅根据其已描述的可见证据补充受控专业术语，颜色名称则只能来自本幅画上方颜色识别结果，并统一写成“推测为XX色”
 
 ## 快速运行
 
-直接打开 `web_demo/index.html` 即可使用。网页依赖 CDN 中的 Plotly、Three.js 和 Google Fonts；如果需要完整显示 3D 图和字体，请保持网络连接。
+Windows 用户下载并解压仓库后，可以按所需浏览器选择启动文件：
+
+- `启动画基因_Google.bat`：使用 Windows 当前的默认浏览器；若希望由 Chrome 打开，请先将 Chrome 设为默认浏览器；
+- `启动画基因_Edge.bat`：明确使用 Microsoft Edge，未安装 Edge 时自动回退到默认浏览器。
+
+首次运行会自动：
+
+1. 在项目内创建隔离的 `.venv`；
+2. 安装题跋检测器、PaddleOCR 和知画服务所需依赖；
+3. 从 ModelScope 下载约 7.5 GB 的 `Qwen2.5-VL-3B-Instruct`，下载中断后可再次运行以续传；
+4. 启动题跋检测器（8005）、PaddleOCR（8004）、知画（8006）和本地网页（8000）；
+5. 服务全部就绪后自动打开浏览器。
+
+电脑需要预先安装 **64 位 Python 3.10 或更高版本**，首次运行需要联网，并建议至少预留 15–20 GB 磁盘空间。模型、虚拟环境和运行日志都保存在本机，不会上传到 GitHub。请保持启动窗口开启；关闭窗口或按 `Ctrl+D` 会停止本次启动的服务。
+
+### 浏览器兼容说明
+
+- 网页兼容当前版本的 Microsoft Edge 和 Google Chrome，两者均为 Chromium 内核浏览器。
+- 已在 Microsoft Edge 155 中验证网页加载，以及题跋检测器、PaddleOCR、知画三个本地服务的健康检查请求。
+- 请通过启动器打开 `http://127.0.0.1:8000/web_demo/index.html`，不要直接双击 `web_demo/index.html`。使用本地网页地址能避免不同浏览器对 `file://` 页面权限处理不一致。
+- 如果默认浏览器是 Chrome，但希望使用 Edge，请双击 `启动画基因_Edge.bat`。
+
+### Python 版本兼容说明
+
+- **推荐使用 64 位 Python 3.12**；本项目已在 Python 3.12.8 上验证。
+- 启动器最低要求 Python 3.10。暂不建议直接使用过新的 Python 版本，因为 PaddlePaddle、PyTorch 或其他模型依赖可能尚未提供相匹配的 Windows 安装包。
+- Windows 的 `py.exe` 可能仍指向已经卸载或不存在的 Python 版本。例如 `py -3` 指向失效的 Python 3.13 时，双击批处理会启动失败。当前启动器会先检查 `py -3` 是否真正可用，不可用时自动回退到 `python` 命令。
+- 如果仍无法启动，请在命令提示符中运行 `py -3 --version` 和 `python --version`。只要其中一个能够正确显示 Python 3.10–3.12 的版本号，启动器就可以使用；如果两者都不可用，请重新安装 64 位 Python，并在安装界面勾选 **Add Python to PATH**。
+- 不要把其他电脑复制来的 `.venv` 一并使用。虚拟环境包含本机路径和平台相关组件，应删除旧 `.venv` 后由启动批处理在当前电脑上重新创建。
+
+后续运行会复用已经安装的依赖和模型，不会重复下载。网页还依赖 CDN 中的 Plotly、Three.js 和 Google Fonts；如果需要完整显示 3D 图和字体，请保持网络连接。首次题跋识别加载 PaddleOCR、首次知画赏析加载 Qwen 时都可能需要几十秒或更久。
 
 ## 目录说明
 
@@ -25,14 +55,16 @@
 - `mcp_services/color_namer/`：传统色匹配 MCP 服务和数据库
 - `mcp_services/html_generator/`：交互式 HTML 生成 MCP 服务
 - `experiments/`：题款词云、印章热图、报告页面实验
+- `mcp_services/inscription_detector/`：题跋区域检测服务与本地模型
 - `mcp_services/ocr/`：PaddleOCR 题跋识别适配器，输出文字、坐标和置信度
+- `mcp_services/zhihua/`：本地 Qwen2.5-VL、受控术语规范化与可选的 ZhiHua_QA 检索服务，也保留远程兼容模式
 - `data/`：传统色数据
 
 ## 题跋 OCR 试运行
 
-直接打开 `web_demo/index.html` 即可体验颜色分析和浏览器端 OCR。OCR 首次运行需要联网下载繁体中文模型，识别在浏览器本地完成。
+一键启动后，网页会先调用 `8005` 端口的本地模型定位题跋区域，再把检测到的区域交给 `8004` 端口的 PaddleOCR。图片不会提交到外部接口。PaddleOCR 模型若尚未缓存，首次运行需要联网下载。
 
-如果要使用精度更高、适合开发调试的 PaddleOCR 本地服务，再在独立虚拟环境中安装 `mcp_services/ocr/requirements.txt` 后运行：
+如需单独调试 OCR，可在安装 `mcp_services/ocr/requirements.txt` 后运行：
 
 ```bash
 python mcp_services/ocr/paddle_ocr_adapter.py path/to/painting.jpg -o ocr_result.json
@@ -42,7 +74,9 @@ python mcp_services/ocr/paddle_ocr_adapter.py path/to/painting.jpg -o ocr_result
 
 ## 项目边界
 
-网页端是可直接演示的交互原型。MCP 服务、词云、印章热图和智能体编排属于分开的技术探索，运行它们需要额外依赖、数据或服务配置。项目不把实验性功能描述为已经部署的完整鉴定系统。
+网页端是交互原型。颜色分析和印章热图可直接在浏览器运行；题跋 OCR 和国画赏析分别需要本地服务。国画赏析默认使用本机模型，不需要远程推理端点或 API Key。项目不把模型生成内容描述为鉴定结论。
+
+印章原图叠加层只显示第二、第三阶段候选：第二阶段使用蓝色虚线框，第三阶段使用蓝色实线框，第一阶段不显示。概率矩阵仍综合全部候选的启发式证据分；该分数不是统计概率或识别准确率。
 
 ## 贡献说明
 

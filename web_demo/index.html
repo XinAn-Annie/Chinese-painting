@@ -263,19 +263,10 @@
         .metric-bar { grid-column:1 / -1; height:5px; background:#d9d8d2; border-radius:0; overflow:hidden; }
         .metric-bar i { display:block; height:100%; background:#33332f; border-radius:0; }
         .metric-description { color:#777771; font-size:.82em; margin:-3px 0 7px; }
-        .technique-insight { margin-top:18px; padding-top:16px; border-top:1px solid #c9c8c2; }
-        .technique-insight h3 { margin:0 0 4px; color:#343430; }
-        .technique-chart-wrap { display:block; }
-        #techniqueChart { display:block; width:100%; height:auto; margin:6px auto 0; overflow:visible; }
-        .technique-legend { display:grid; gap:10px; margin-top:12px; }
-        .technique-legend-item { display:grid; grid-template-columns:72px 1fr 54px; align-items:center; gap:10px; color:#343430; font-size:.88em; font-variant-numeric:tabular-nums; }
-        .technique-legend-item .technique-track { height:5px; background:#d9d8d2; border-radius:0; overflow:hidden; }
-        .technique-legend-item .technique-fill { display:block; height:100%; border-radius:0; background:#33332f !important; }
-        .technique-knowledge { margin-top:14px; border:1px solid #cfcec8; border-radius:4px; padding:10px 12px; color:#4e4e49; background:transparent; }
-        .technique-knowledge summary { cursor:pointer; font-weight:600; }
-        .technique-knowledge p { margin:10px 0 0; line-height:1.65; font-size:.9em; }
-        .technique-brief { margin:14px 0 0; line-height:1.75; color:#343430; background:transparent; border-left:2px solid #777771; padding:8px 0 8px 13px; border-radius:0; }
-        @media (max-width: 620px) { .technique-chart-wrap { grid-template-columns:1fr; } }
+        .appreciation-question { width:100%; min-height:92px; margin:14px 0 10px; padding:12px 14px; resize:vertical; border:1px solid #c9c8c2; border-radius:4px; background:#f7f6f2; color:#292925; font:inherit; line-height:1.6; }
+        .appreciation-question:focus { outline:2px solid rgba(28,28,26,.18); border-color:#777771; }
+        .appreciation-output { min-height:180px; margin-top:16px; padding:18px; border-left:2px solid #777771; background:#f7f6f2; color:#343430; line-height:1.85; white-space:pre-wrap; overflow-wrap:anywhere; }
+        .appreciation-meta { margin-top:10px; color:#777771; font-size:.78em; }
         .analysis-note { color:#6e6e68; font-size:.84em; margin-top:12px; line-height:1.55; }
         #ocrOverlay { position: absolute; left: 0; top: 0; pointer-events: none; }
         .preview-wrap { position: relative; display: inline-block; max-width: 100%; }
@@ -345,7 +336,7 @@
         <section class="ocr-panel">
             <p class="viz-kicker">INSCRIPTION TEXT · LOCAL OCR</p>
             <h2>题跋文字识别与词云</h2>
-            <p class="upload-subtext">请先启动本地题跋检测器和 PaddleOCR。系统只识别检测到的题跋区域；没有可靠候选时显示“未检测到”，不会从整张画强行生成文字。</p>
+            <p class="upload-subtext">请通过项目根目录的“启动画基因_Google.bat”或“启动画基因_Edge.bat”打开本页。系统只识别检测到的题跋区域；没有可靠候选时显示“未检测到”，不会从整张画强行生成文字。</p>
             <button class="btn" id="ocrBtn" style="display:none; margin: 12px auto;">识别题跋文字</button>
             <div id="ocrStatus" class="ocr-status">等待上传古画</div>
             <div class="ocr-grid">
@@ -385,21 +376,15 @@
                 <p id="sealResearchStatus" class="analysis-note">上传古画并分析后生成</p>
             </div>
             <div class="analysis-card">
-                <p class="viz-kicker">BRUSHWORK PROFILE · EXPERIMENTAL</p>
-                <h2>绘画技法倾向分析</h2>
-                <div id="techniqueResults"><p class="analysis-note">上传古画并分析后生成</p></div>
-                <div class="technique-insight">
-                    <h3>五类技法倾向指数</h3>
-                    <p class="viz-subtitle">五轴分别计分，面积仅用于比较形态；各项独立，不合计为占比。</p>
-                    <div class="technique-chart-wrap">
-                        <svg id="techniqueChart" viewBox="0 0 760 440" role="img" aria-label="五类绘画技法倾向雷达图"></svg>
-                        <div id="techniqueLegend" class="technique-legend"><p class="analysis-note">分析后生成五类技法倾向指数</p></div>
-                    </div>
-                    <p class="viz-source">IMAGE FEATURES · INDEPENDENT INDEX 0–100</p>
-                    <p class="analysis-note">各项为独立的图像特征倾向指数（0–100），技法之间可能交叉，不代表画作中实际技法占比，也不会强制合计为100%。</p>
-                    <p id="techniqueBrief" class="technique-brief">上传古画并分析后生成分析简报。</p>
-                </div>
-                <p class="analysis-note">这是基于图像特征的实验性辅助分析，不等同于专家鉴定或已训练完成的技法分类模型。</p>
+                <p class="viz-kicker">ZHIHUA VLM · APPRECIATION</p>
+                <h2>国画赏析与知识讲解</h2>
+                <p class="viz-subtitle">由知画视觉语言模型讲解构图、笔墨、设色、意象与审美。可以填写一个关注问题，也可以留空使用审慎的默认赏析提示。</p>
+                <label for="appreciationPrompt"><strong>可选问题</strong></label>
+                <textarea id="appreciationPrompt" class="appreciation-question" maxlength="2000" placeholder="例如：请重点分析这幅画的构图和用墨。"></textarea>
+                <button class="btn" id="appreciationBtn" disabled>请知画赏析</button>
+                <p id="appreciationStatus" class="analysis-note">上传画作后可开始赏析</p>
+                <div id="appreciationOutput" class="appreciation-output">知画返回的赏析将显示在这里。</div>
+                <p id="appreciationMeta" class="appreciation-meta">模型生成内容仅供学习参考，不用于真伪鉴定、作者确认或价格评估。</p>
             </div>
         </section>
     </div>
@@ -860,10 +845,11 @@
         const sealStatus = document.getElementById('sealStatus');
         const sealResearchStatus = document.getElementById('sealResearchStatus');
         const sealColorState = {low: lowProbabilityColor.value, high: highProbabilityColor.value, picker: null, values: [], columns: 24, rows: 16, candidates: [], source: null};
-        const techniqueResults = document.getElementById('techniqueResults');
-        const techniqueChart = document.getElementById('techniqueChart');
-        const techniqueLegend = document.getElementById('techniqueLegend');
-        const techniqueBrief = document.getElementById('techniqueBrief');
+        const appreciationPrompt = document.getElementById('appreciationPrompt');
+        const appreciationBtn = document.getElementById('appreciationBtn');
+        const appreciationStatus = document.getElementById('appreciationStatus');
+        const appreciationOutput = document.getElementById('appreciationOutput');
+        const appreciationMeta = document.getElementById('appreciationMeta');
 
         uploadArea.addEventListener('click', () => imageInput.click());
         uploadArea.addEventListener('dragover', (e) => {
@@ -890,6 +876,9 @@
 
         function handleImageUpload(file) {
             selectedFile = file;
+            extractedColors = [];
+            matchedColors = [];
+            appreciationBtn.disabled = true;
             const reader = new FileReader();
             reader.onload = (e) => {
                 imagePreview.src = e.target.result;
@@ -1006,6 +995,15 @@
 
         async function runLocalRegionOCR(file) {
             ocrStatus.textContent = '正在使用本地题跋检测器定位文字区域…';
+            try {
+                const [detectorHealth, ocrHealth] = await Promise.all([
+                    fetch('http://127.0.0.1:8005/api/health'),
+                    fetch('http://127.0.0.1:8004/api/health')
+                ]);
+                if (!detectorHealth.ok || !ocrHealth.ok) throw new Error();
+            } catch (_) {
+                throw new Error('本地识别服务未启动，请双击项目根目录的“启动画基因_Google.bat”或“启动画基因_Edge.bat”并保持窗口开启');
+            }
             const imageBase64 = await fileToDataUrl(file);
             const detected = await fetch('http://127.0.0.1:8005/api/detect-inscriptions', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -1051,11 +1049,11 @@
             } catch (error) {
                 ocrItems = [];
                 renderOCRResults();
-                ocrStatus.textContent = `识别未完成：${error.message}。请检查本地题跋检测器和 PaddleOCR 服务。`;
+                ocrStatus.textContent = `识别未完成：${error.message}。`;
             } finally { ocrBtn.disabled = false; }
         });
 
-        function analyzeSealAndTechnique(image) {
+        function analyzeSeal(image) {
             const source = document.createElement('canvas');
             const maxSide = 1600;
             const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
@@ -1063,19 +1061,10 @@
             source.height = Math.max(1, Math.round(image.naturalHeight * scale));
             const sctx = source.getContext('2d'); sctx.drawImage(image, 0, 0, source.width, source.height);
             const pixels = sctx.getImageData(0, 0, source.width, source.height).data;
-            let satSum=0, dark=0, light=0, edge=0, samples=0, previous=null;
-            for(let y=0;y<source.height;y++) for(let x=0;x<source.width;x++) {
-                const i=(y*source.width+x)*4, r=pixels[i], g=pixels[i+1], b=pixels[i+2];
-                const mx=Math.max(r,g,b), mn=Math.min(r,g,b), sat=mx?((mx-mn)/mx):0, lum=(r+g+b)/3;
-                satSum+=sat; if(lum<70) dark++; if(lum>225) light++;
-                if(x>0 && previous!==null && Math.abs(lum-previous)>35) edge++; previous=lum; samples++;
-            }
             const detection=SealDetector.detect(pixels,source.width,source.height);
             drawSealHeatmap(detection,source);
             sealStatus.textContent=`红色候选 ${detection.redCount} → 外形通过 ${detection.shapeCount} → 镂空通过 ${detection.accepted.length}。热图颜色由低概率色到高概率色渐变；分数是规则证据分，不是识别准确率。`;
             const evidence=document.getElementById('sealEvidence'); evidence.replaceChildren();
-            const metrics={saturation:satSum/samples, dark:dark/samples, light:light/samples, edge:edge/samples};
-            renderTechnique(metrics);
         }
 
         function sealProbabilityColor(score) {
@@ -1100,16 +1089,15 @@
         function drawSealHeatmap(result, source) {
             sealHeatmap.width=source.width; sealHeatmap.height=source.height;
             const ctx=sealHeatmap.getContext('2d');ctx.globalAlpha=.62;ctx.drawImage(source,0,0);ctx.globalAlpha=1;
-            result.candidates.slice(0,30).forEach((c,i)=>{
+            result.candidates.filter(c=>c.stage>=2).slice(0,30).forEach((c,i)=>{
                 const [x,y,w,h]=c.bbox;
                 const color=hexToRgb(sealColorState.low).map((v,k)=>Math.round(v+(hexToRgb(sealColorState.high)[k]-v)*Math.max(0,Math.min(1,c.score/100))));
                 ctx.save();ctx.fillStyle=`rgba(${color.join(',')},${.12+c.score/500})`;ctx.beginPath();ctx.ellipse(x+w/2,y+h/2,Math.max(w*.55,5),Math.max(h*.55,5),0,0,Math.PI*2);ctx.fill();ctx.restore();
-                ctx.strokeStyle=sealProbabilityColor(c.score);ctx.lineWidth=Math.max(1,source.width/650);
+                ctx.strokeStyle='#2563eb';ctx.lineWidth=Math.max(1,source.width/650);
                 ctx.setLineDash(c.stage===3?[]:[5,4]);ctx.strokeRect(x,y,w,h);ctx.setLineDash([]);
                 ctx.font=`${Math.max(12,source.width/70)}px sans-serif`;ctx.fillStyle='#fff';
                 ctx.fillRect(x,Math.max(0,y-22),70,22);ctx.fillStyle='#222';ctx.fillText(`${i+1}: ${c.score}`,x+2,Math.max(17,y-4));
             });
-            const grad=ctx.createLinearGradient(18,source.height-24,180,source.height-24);grad.addColorStop(0,sealColorState.low);grad.addColorStop(1,sealColorState.high);ctx.fillStyle=grad;ctx.fillRect(18,source.height-18,162,10);ctx.fillStyle='#fff';ctx.fillRect(18,source.height-38,162,18);ctx.fillStyle='#333';ctx.font='14px sans-serif';ctx.fillText('低概率                         高概率',22,source.height-24);
             drawScientificSealHeatmap(result,source);
         }
 
@@ -1154,7 +1142,7 @@
             sealResearchStatus.textContent=`矩阵尺寸 ${cols} × ${rows}；${result.candidates.length} 个候选。色值对应局部启发式证据分，未经概率校准。`;
             document.getElementById('downloadSealHeatmap').disabled=false;document.getElementById('downloadSealJSON').disabled=false;
         }
-        document.getElementById('sealBtn').addEventListener('click',()=>analyzeSealAndTechnique(imagePreview));
+        document.getElementById('sealBtn').addEventListener('click',()=>analyzeSeal(imagePreview));
         document.getElementById('downloadSealHeatmap').addEventListener('click',()=>{const a=document.createElement('a');a.download='seal_probability_heatmap.png';a.href=sealResearchHeatmap.toDataURL('image/png');a.click();});
         document.getElementById('downloadSealJSON').addEventListener('click',()=>{const payload={grid:{columns:sealColorState.columns,rows:sealColorState.rows},colors:{low:sealColorState.low,high:sealColorState.high},probabilities:sealColorState.values,candidates:sealColorState.candidates,meaning:'probability-like heuristic score; not calibrated probability'};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.download='seal_probability_heatmap.json';a.href=URL.createObjectURL(blob);a.click();URL.revokeObjectURL(a.href);});
         lowProbabilityColor.addEventListener('input',()=>{sealColorState.low=lowProbabilityColor.value;drawSealColorStrip();if(sealColorState.source)drawScientificSealHeatmap({candidates:sealColorState.candidates}, sealColorState.source);});
@@ -1166,84 +1154,48 @@
         [lowColorControl,highColorControl].forEach(control=>control.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();control.click();}}));
         sealColorStrip.addEventListener('click',(event)=>{event.stopPropagation();if(!sealColorState.picker)return;const rect=sealColorStrip.getBoundingClientRect(),t=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width));const c=sealProbabilityColor(t*100);if(sealColorState.picker==='low'){sealColorState.low=c;lowProbabilityColor.value=c;}else{sealColorState.high=c;highProbabilityColor.value=c;}setSealPicker(null);drawSealColorStrip();if(sealColorState.source)drawScientificSealHeatmap({candidates:sealColorState.candidates},sealColorState.source);});
         document.addEventListener('click',()=>setSealPicker(null));
-        imagePreview.addEventListener('load',()=>{document.getElementById('sealBtn').disabled=false;document.getElementById('downloadSealHeatmap').disabled=true;document.getElementById('downloadSealJSON').disabled=true;sealColorState.source=null;sealColorState.values=[];sealStatus.textContent='图片已更新，请重新检测印章';sealResearchStatus.textContent='上传古画并分析后生成';document.getElementById('sealEvidence').replaceChildren();sealHeatmap.getContext('2d').clearRect(0,0,sealHeatmap.width,sealHeatmap.height);sealResearchHeatmap.getContext('2d').clearRect(0,0,sealResearchHeatmap.width,sealResearchHeatmap.height);});
+        imagePreview.addEventListener('load',()=>{document.getElementById('sealBtn').disabled=false;appreciationBtn.disabled=true;document.getElementById('downloadSealHeatmap').disabled=true;document.getElementById('downloadSealJSON').disabled=true;sealColorState.source=null;sealColorState.values=[];sealStatus.textContent='图片已更新，请重新检测印章';sealResearchStatus.textContent='上传古画并分析后生成';appreciationStatus.textContent='请先点击上方“分析颜色”，完成后才能请求知画赏析';appreciationOutput.textContent='知画返回的赏析将显示在这里。';appreciationMeta.textContent='赏析中的颜色只允许使用本幅画识别出的中国传统色名。';document.getElementById('sealEvidence').replaceChildren();sealHeatmap.getContext('2d').clearRect(0,0,sealHeatmap.width,sealHeatmap.height);sealResearchHeatmap.getContext('2d').clearRect(0,0,sealResearchHeatmap.width,sealResearchHeatmap.height);});
         document.getElementById('downloadSealJSON').disabled=true;
         drawSealColorStrip();
 
-        function renderTechnique(m) {
-            const rows=[
-                ['墨色层次', Math.min(1, m.dark*2 + m.edge*.4), '深色像素与明暗变化'],
-                ['线条边缘', Math.min(1, m.edge*2.5), '局部边缘密度'],
-                ['设色倾向', Math.min(1, m.saturation*1.6), '颜色饱和度'],
-                ['留白倾向', Math.min(1, m.light*1.15), '浅色/留白区域比例']
-            ];
-            techniqueResults.innerHTML=rows.map(([name,value,desc])=>`<div class="metric-row"><span>${name}</span><b>${Math.round(value*100)}%</b><div class="metric-bar" role="meter" aria-label="${name}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(value*100)}"><i style="width:${Math.round(value*100)}%"></i></div><p class="metric-description">${desc}</p></div>`).join('');
-
-            // 技法并非互斥类别：逐项给出图像特征倾向指数，不把分数归一化成虚假的组成占比。
-            const clamp01=value=>Math.max(0,Math.min(1,value));
-            const line=clamp01(m.edge*2.5), color=clamp01(m.saturation*1.6), ink=clamp01(m.dark*2), blank=clamp01(m.light*1.15);
-            const profiles = [
-                {name:'白描', color:'#64748b', score:.65*(1-color)+.35*line},
-                {name:'工笔', color:'#b7791f', score:.72*line+.14*blank+.14*ink},
-                {name:'写意', color:'#c05640', score:.35*(1-line)+.25*ink+.20*(1-blank)+.20*color},
-                {name:'泼墨', color:'#355c7d', score:.50*ink+.30*(1-line)+.20*(1-blank)},
-                {name:'没骨', color:'#7c6f9f', score:.50*color+.30*(1-line)+.20*blank}
-            ];
-            profiles.forEach(item=>item.percent=Math.round(clamp01(item.score)*100));
-            drawTechniqueChart(profiles);
-            const ranked=profiles.slice().sort((a,b)=>b.score-a.score);
-            const dominant=ranked[0], secondary=ranked[1];
-            const lineText = line>.55 ? '检测到较明显的线性边缘' : '线性边缘整体不突出';
-            const colorText = color>.45 ? '色彩饱和度较高' : '色彩较克制，墨色与浅色区域更显著';
-            const featureValues={line,color,ink,blank};
-            const leadingNotes=[dominant,secondary].map(item=>`${item.name}（${item.percent}/100）：${techniqueSubtype(item.name,featureValues,profiles)}`);
-            techniqueBrief.textContent=`分析简报：${lineText}，${colorText}。结合五项倾向，重点参考：${leadingNotes.join('；')}。各项技法可以交叉；单勾/复勾、泼墨的水分渗化及山水/花鸟/人物题材，需要局部观察或题材识别，不能由当前整图统计单独确认。结果仅供辅助比较。`;
-        }
-
-        function techniqueSubtype(name, f, profiles) {
-            const gongbi=profiles.find(item=>item.name==='工笔').score;
-            const xieyi=profiles.find(item=>item.name==='写意').score;
-            if(name==='白描') return f.line>.55&&f.color<.3?'线描与低设色特征较明显；单勾/复勾待局部核实':'有白描线索，但单勾/复勾需观察线条是否二次复勾';
-            if(name==='工笔') {
-                if(f.line<.38&&f.color>.42) return '轮廓线较弱且设色明显，偏工笔没骨线索';
-                if(f.color>.62) return '偏工笔重彩线索';
-                if(f.color>.25) return '偏工笔淡彩线索';
-                return '偏工笔白描线索';
+        appreciationBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            appreciationBtn.disabled = true;
+            appreciationStatus.textContent = '正在调用知画模型，请稍候…';
+            appreciationOutput.textContent = '正在生成国画赏析…';
+            appreciationMeta.textContent = '模型生成内容仅供学习参考。';
+            try {
+                const form = new FormData();
+                form.append('image', selectedFile, selectedFile.name || 'painting.jpg');
+                const allowedColors = [...new Set(matchedColors
+                    .map(item => item.matched?.中文名)
+                    .filter(Boolean))];
+                form.append('allowed_colors', JSON.stringify(allowedColors));
+                const prompt = appreciationPrompt.value.trim();
+                if (prompt) form.append('prompt', prompt);
+                const response = await fetch('http://127.0.0.1:8006/api/appreciate', {method:'POST', body:form});
+                const data = await response.json().catch(()=>({}));
+                if (!response.ok) throw new Error(data.error || `服务返回 HTTP ${response.status}`);
+                appreciationOutput.textContent = data.analysis;
+                appreciationStatus.textContent = '知画赏析已完成';
+                const sourceText = data.knowledge?.enabled
+                    ? `已检索 ${data.knowledge.retrieved ?? 0} 条 ZhiHua_QA 参考`
+                    : '未连接作品知识库，直接分析画面';
+                const termCount = data.terminology?.matches?.length ?? 0;
+                const rejectedTermCount = data.terminology?.rejected_terms?.length ?? 0;
+                const rejectedText = rejectedTermCount
+                    ? ` · 已拦截 ${rejectedTermCount} 项证据不足的术语`
+                    : '';
+                const removedColorCount = data.colors?.removed_claims?.length ?? 0;
+                const colorText = `允许传统色 ${data.colors?.allowed_names?.length ?? 0} 项${removedColorCount ? `，已过滤 ${removedColorCount} 条越界颜色描述` : ''}`;
+                appreciationMeta.textContent = `模型：${data.model || 'Qwen2.5-VL-3B-Instruct'} · ${sourceText} · ${colorText} · 受控术语命中 ${termCount} 项${rejectedText} · 生成内容仅供学习参考，不用于真伪鉴定、作者确认或价格评估。`;
+            } catch (error) {
+                appreciationOutput.textContent = '本次未生成赏析。';
+                appreciationStatus.textContent = `知画赏析未完成：${error.message}。请确认本地 8006 服务已启动。`;
+            } finally {
+                appreciationBtn.disabled = false;
             }
-            if(name==='写意') return f.line>.55?'线条/细节较多，偏小写意':'边缘较概括，偏大写意；山水/花鸟/人物题材待核实';
-            if(name==='泼墨') return f.ink>.45&&f.line<.48?'大块墨色与较少锐利边缘符合泼墨线索；题材小类待核实':'泼墨证据不足以从整图统计确认；山水/花鸟/人物需结合局部题材判断';
-            if(name==='没骨') {
-                const mode=gongbi>.52&&xieyi>.52?'兼工带写没骨':gongbi>=xieyi?'工笔没骨':'写意没骨';
-                const medium=f.color>.42?'设色没骨':'水墨没骨';
-                return `${medium}线索，表现精细度倾向${mode}；没骨花鸟/人物/山水题材待核实`;
-            }
-            return '需结合局部笔触与题材进一步判断';
-        }
-
-        function drawTechniqueChart(items) {
-            const w=760,h=440,cx=380,cy=214,radius=132,angles=items.map((_,i)=>-Math.PI/2+i*Math.PI*2/5);
-            const point=(angle,scale)=>({x:cx+Math.cos(angle)*radius*scale,y:cy+Math.sin(angle)*radius*scale});
-            const polygon=scale=>angles.map(a=>{const p=point(a,scale);return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;}).join(' ');
-            let svg='';
-            for(let ring=1;ring<=4;ring++) {
-                const scale=ring/4;
-                svg+=`<polygon points="${polygon(scale)}" fill="none" stroke="${ring===4?'#85857e':'#c9c8c2'}" stroke-width="${ring===4?1.2:.85}"/>`;
-            }
-            angles.forEach((angle,i)=>{
-                const end=point(angle,1),label=point(angle,1.32),anchor=label.x<cx-10?'end':label.x>cx+10?'start':'middle';
-                svg+=`<line x1="${cx}" y1="${cy}" x2="${end.x.toFixed(1)}" y2="${end.y.toFixed(1)}" stroke="#c9c8c2" stroke-width=".85"/>`;
-                svg+=`<text x="${label.x.toFixed(1)}" y="${(label.y+5).toFixed(1)}" text-anchor="${anchor}" fill="#343430" font-family="Inter, 'Microsoft YaHei', sans-serif" font-size="14" font-weight="650">${items[i].name}</text>`;
-            });
-            [25,50,75,100].forEach(value=>{
-                const y=cy-radius*value/100;
-                svg+=`<text x="${cx+5}" y="${y-3}" fill="#777771" font-family="Inter, sans-serif" font-size="10">${value}</text>`;
-            });
-            const dataPoints=items.map((item,i)=>point(angles[i],item.score));
-            svg+=`<polygon points="${dataPoints.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}" fill="#666660" fill-opacity=".16" stroke="#292925" stroke-width="2.4" stroke-linejoin="round"/>`;
-            dataPoints.forEach((p,i)=>{svg+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="#292925"><title>${items[i].name}：${items[i].percent}/100</title></circle>`;});
-            techniqueChart.innerHTML=svg;
-            techniqueLegend.innerHTML=items.map(item=>`<div class="technique-legend-item"><span>${item.name}</span><div class="technique-track"><i class="technique-fill" style="width:${item.percent}%"></i></div><b>${item.percent}/100</b></div>`).join('');
-        }
+        });
 
         // 颜色提取函数
         function extractColorsFromImage(image, numColors = 8) {
@@ -1343,6 +1295,30 @@
             return closestColor;
         }
 
+        // 前端展示前按数据库颜色去重；同一数据库颜色保留距离最近的提取色
+        function filterUniqueDatabaseColors(colorPairs) {
+            const closestPairByDatabaseColor = new Map();
+
+            colorPairs.forEach((colorPair, inputIndex) => {
+                const matched = colorPair.matched;
+                if (!matched) return;
+
+                // HEX 表示数据库中的实际颜色；没有 HEX 时以 RGB 作为兜底键。
+                const databaseColorKey = matched.HEX
+                    ? matched.HEX.toUpperCase()
+                    : matched.RGB.join(',');
+                const current = closestPairByDatabaseColor.get(databaseColorKey);
+
+                if (!current || matched.distance < current.colorPair.matched.distance) {
+                    closestPairByDatabaseColor.set(databaseColorKey, { colorPair, inputIndex });
+                }
+            });
+
+            return [...closestPairByDatabaseColor.values()]
+                .sort((a, b) => a.inputIndex - b.inputIndex)
+                .map(item => item.colorPair);
+        }
+
         // 分析按钮点击事件
         analyzeBtn.addEventListener('click', () => {
             const image = imagePreview;
@@ -1360,17 +1336,22 @@
                 // 提取颜色
                 extractedColors = extractColorsFromImage(image,25);
                 
-                // 匹配数据库颜色
-                matchedColors = extractedColors.map(color => ({
+                // 每个提取色都与完整数据库比较，再在前端筛掉重复的数据库颜色
+                const allColorMatches = extractedColors.map(color => ({
                     extracted: color,
                     matched: findClosestColor(color)
                 }));
+                matchedColors = filterUniqueDatabaseColors(allColorMatches);
                 
                 // 显示结果
                 displayColorResults();
+                appreciationBtn.disabled = matchedColors.length === 0;
+                appreciationStatus.textContent = matchedColors.length
+                    ? '颜色识别已完成，可以请求知画赏析'
+                    : '未识别到可用传统色，暂不能请求知画赏析';
                 
                 // 生成3D可视化
-                analyzeSealAndTechnique(image);
+                analyzeSeal(image);
                 generate3DPlot();
             }, 500);
         });
@@ -1402,18 +1383,18 @@
             
             // 提取的颜色点
             const extractedTrace = {
-                x: matchedColors.map(cp => cp.extracted[0]),
-                y: matchedColors.map(cp => cp.extracted[1]),
-                z: matchedColors.map(cp => cp.extracted[2]),
+                x: extractedColors.map(color => color[0]),
+                y: extractedColors.map(color => color[1]),
+                z: extractedColors.map(color => color[2]),
                 mode: 'markers',
                 type: 'scatter3d',
                 name: '提取颜色',
                 marker: {
                     size: 6,
-                    color: matchedColors.map(cp => `rgb(${cp.extracted.join(',')})`),
+                    color: extractedColors.map(color => `rgb(${color.join(',')})`),
                     symbol: 'circle'
                 },
-                text: matchedColors.map(cp => `提取: RGB(${cp.extracted.join(', ')})`),
+                text: extractedColors.map(color => `提取: RGB(${color.join(', ')})`),
                 hovertemplate: '%{text}<extra></extra>'
             };
             

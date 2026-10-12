@@ -21,6 +21,10 @@ dist/
 # Temporary files
 *.log
 *.tmp
+.offload/
+.models/
+.local_logs/
+.startup.lock
 
 # Python bytecode
 __pycache__/

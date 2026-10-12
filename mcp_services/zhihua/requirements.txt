@@ -1,0 +1,7 @@
+Flask>=3.0,<4
+flask-cors>=4.0,<7
+torch>=2.6
+torchvision>=0.21
+transformers>=4.49,<5
+accelerate>=1.2,<2
+qwen-vl-utils>=0.0.8,<1

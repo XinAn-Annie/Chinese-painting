@@ -4,11 +4,10 @@
 
 ## 启动
 
-在训练环境中运行（该环境已安装 CUDA PyTorch 和 Ultralytics）：
+普通用户双击项目根目录的 `启动画基因_Google.bat` 或 `启动画基因_Edge.bat`，启动器会自动安装依赖并启动此服务。首次安装完成后，也可以在项目根目录单独调试：
 
 ```powershell
-cd D:\codex\画基因_项目整理\public_repo
-& 'D:\codex\画基因_题跋检测训练\.venv\Scripts\python.exe' .\mcp_services\inscription_detector\server.py
+& '.\.venv\Scripts\python.exe' .\mcp_services\inscription_detector\server.py
 ```
 
 服务地址：`http://127.0.0.1:8005`。网页会把图片发送到 `/api/detect-inscriptions`，得到题跋框后再把每个区域发给 8004 端口的 PaddleOCR。
