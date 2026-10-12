@@ -14,6 +14,7 @@ import time
 import urllib.request
 import webbrowser
 from pathlib import Path
+from statistics import median
 
 
 ROOT = Path(__file__).resolve().parent
@@ -31,6 +32,12 @@ LOG_DIR = ROOT / ".local_logs"
 LOCK_PATH = ROOT / ".startup.lock"
 CHILDREN: list[tuple[subprocess.Popen, object]] = []
 LOCK_HANDLE = None
+
+PIP_INDEX_CANDIDATES = (
+    ("PyPI 官方源", "https://pypi.org/simple/"),
+    ("阿里云", "https://mirrors.aliyun.com/pypi/simple/"),
+    ("清华大学", "https://pypi.tuna.tsinghua.edu.cn/simple/"),
+)
 
 
 def port_is_open(port: int) -> bool:
@@ -78,6 +85,51 @@ def requirements_hash() -> str:
     return hashlib.sha256(REQUIREMENTS.read_bytes()).hexdigest()
 
 
+def select_fastest_pip_index(timeout: float = 8.0, attempts: int = 2) -> str:
+    """实测候选 PyPI 索引，返回当前网络下响应最快的可用源。"""
+    candidates = list(PIP_INDEX_CANDIDATES)
+    configured = os.getenv("PIP_INDEX_URL", "").strip()
+    if configured and all(url.rstrip("/") != configured.rstrip("/") for _, url in candidates):
+        candidates.append(("系统已配置源", configured.rstrip("/") + "/"))
+
+    results: list[tuple[float, str, str]] = []
+    print("[测速] 正在选择当前网络下最快的 Python 软件源……", flush=True)
+    for name, base_url in candidates:
+        samples: list[float] = []
+        probe_url = base_url.rstrip("/") + "/pip/"
+        for _ in range(attempts):
+            started = time.monotonic()
+            try:
+                request = urllib.request.Request(
+                    probe_url,
+                    headers={"User-Agent": "Zhihua-Launcher/1.0"},
+                )
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    if response.status != 200:
+                        raise RuntimeError(f"HTTP {response.status}")
+                    response.read(128 * 1024)
+                samples.append(time.monotonic() - started)
+            except Exception:
+                samples = []
+                break
+
+        if samples:
+            elapsed = median(samples)
+            results.append((elapsed, name, base_url))
+            print(f"[测速] {name}: {elapsed:.2f} 秒", flush=True)
+        else:
+            print(f"[测速] {name}: 不可用", flush=True)
+
+    if not results:
+        fallback = "https://pypi.org/simple/"
+        print(f"[测速] 所有测速请求均失败，回退至：{fallback}", flush=True)
+        return fallback
+
+    elapsed, name, selected = min(results)
+    print(f"[测速] 已选择 {name}：{selected}（{elapsed:.2f} 秒）", flush=True)
+    return selected
+
+
 def acquire_startup_lock() -> None:
     """避免重复双击后同时安装依赖或下载同一模型。"""
     global LOCK_HANDLE
@@ -116,7 +168,9 @@ def ensure_environment() -> None:
 
     print("[首次运行 2/3] 正在安装题跋检测、PaddleOCR 和知画依赖；这可能需要较长时间……", flush=True)
     env = os.environ.copy()
-    env["PIP_DEFAULT_TIMEOUT"] = "180"
+    env.setdefault("PIP_DEFAULT_TIMEOUT", "180")
+    if os.getenv("ZHIHUA_AUTO_PIP_INDEX", "").strip().lower() in {"1", "true", "yes", "on"}:
+        env["PIP_INDEX_URL"] = select_fastest_pip_index()
     subprocess.run(
         [str(VENV_PYTHON), "-m", "pip", "install", "--disable-pip-version-check", "-r", str(REQUIREMENTS)],
         cwd=ROOT,
