@@ -4,7 +4,9 @@
 
 ## 安装
 
-普通用户直接双击项目根目录的 `启动画基因_Google.bat` 或 `启动画基因_Edge.bat`；启动器会创建独立虚拟环境并安装依赖。PaddleOCR 模型权重由首次识别自动下载，不会提交到 GitHub。
+普通用户直接双击项目根目录的 `启动画基因_Google.bat` 或 `启动画基因_Edge.bat`；启动器会创建独立虚拟环境并安装依赖。书法 OCR 微调权重不提交到仓库，首次启动时会从 GitHub Release 下载、校验 SHA256，并解压到 `.models/PP-OCRv5_server_rec_hcsu_stage1/`。
+
+默认资产名为 `PP-OCRv5_server_rec_hcsu_stage1.zip`。如果发布到其他仓库，可用环境变量 `OCR_MODEL_URL` 覆盖下载直链；私有 Release 可额外设置具有读取权限的 `GITHUB_TOKEN`。也可以通过 `OCR_TEXT_RECOGNITION_MODEL_DIR` 指向已下载的模型目录。
 
 ```bash
 pip install -r requirements.txt
@@ -24,7 +26,7 @@ python server.py
 
 然后打开 `web_demo/index.html`，上传图片并点击“识别题跋文字”。服务监听 `http://127.0.0.1:8004`，只接受本机网页的图片上传，不把图片提交到外部接口。
 
-默认使用 `chinese_cht`，优先兼容繁体中文。不同版本若不接受该语言名称，需要按本机 PaddleOCR 文档改为可用的中文模型名称。结果示例：
+默认明确使用 `PP-OCRv5_server_rec` 文字识别模型，兼顾简体、繁体、手写、竖排和生僻字等场景。第一次识别时 PaddleOCR 会自动下载模型权重。若需临时指定其他 3.x 识别模型，可使用 `--rec-model 模型名称`，或为本地服务设置 `OCR_TEXT_RECOGNITION_MODEL` 环境变量。结果示例：
 
 ```json
 [
