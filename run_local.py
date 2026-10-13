@@ -379,8 +379,8 @@ def cleanup() -> None:
 def main() -> int:
     atexit.register(cleanup)
     acquire_startup_lock()
-    if sys.version_info < (3, 10):
-        raise RuntimeError("需要 Python 3.10 或更高版本，请先安装 64 位 Python。")
+    if sys.version_info[:2] != (3, 12):
+        raise RuntimeError("需要 64 位 Python 3.12。请安装 Python 3.12 后重新运行启动批处理。")
     ensure_environment()
     ocr_model_path = ensure_ocr_model(
         label="书法 OCR 微调识别模型",
