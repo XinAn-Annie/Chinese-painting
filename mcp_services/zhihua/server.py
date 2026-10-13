@@ -69,6 +69,12 @@ DEFAULT_PROMPT = """请观察这幅中国画。请只依据画面中能够观察
 4. 仅凭当前图片无法确认的信息
 请用自然语言描述可见证据，不直接命名具体技法，不解释寓意、情绪或作者意图，不臆测作者、年代、真伪或题跋原文；不确定时请明确说明。"""
 
+TECHNIQUE_LABELS = ("白描", "工笔", "写意", "泼墨", "没骨")
+TECHNIQUE_MEANING = (
+    "Qwen 根据当前画面在五类技法之间分配的相对倾向，总计 100%；"
+    "该数值不是识别概率，也不构成作者、年代或技法鉴定结论。"
+)
+
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_IMAGE_BYTES
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -109,6 +115,99 @@ def extract_text(message_content: object) -> str:
                 parts.append(item["text"].strip())
         return "\n".join(part for part in parts if part)
     return ""
+
+
+def technique_response_contract() -> str:
+    labels = "、".join(TECHNIQUE_LABELS)
+    return f"""输出格式要求：
+- 最终只输出一个合法 JSON 对象，不要使用 Markdown 代码块，也不要在 JSON 前后添加文字。
+- JSON 必须包含 `analysis`、`technique_scores`、`technique_evidence` 三个字段。
+- `analysis` 是完整的中文赏析正文；正文继续遵守上面的所有边界，不直接给出技法鉴定结论。
+- `technique_scores` 必须且只能包含“{labels}”五个键，值为 0 到 100 的数字，并让五项合计为 100。
+- `technique_evidence` 使用相同五个键，每项用一句短语说明画面依据；看不清时写“当前画面证据不足”，不得补造细节。
+- 这些分数只表示当前画面在五类技法之间的相对视觉倾向，不是识别概率或学术鉴定。"""
+
+
+def normalize_technique_scores(raw_scores: object) -> dict[str, float] | None:
+    if not isinstance(raw_scores, dict):
+        return None
+    values = []
+    for label in TECHNIQUE_LABELS:
+        value = raw_scores.get(label)
+        if isinstance(value, bool):
+            return None
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(number):
+            return None
+        values.append(max(0.0, min(100.0, number)))
+    total = sum(values)
+    if total <= 0:
+        return None
+    normalized = [round(value * 100.0 / total, 1) for value in values]
+    normalized[max(range(len(normalized)), key=normalized.__getitem__)] += round(
+        100.0 - sum(normalized), 1
+    )
+    return {
+        label: max(0.0, min(100.0, round(value, 1)))
+        for label, value in zip(TECHNIQUE_LABELS, normalized)
+    }
+
+
+def parse_model_response(raw_output: str) -> tuple[str, dict[str, object]]:
+    """Extract the narrative and a validated five-technique distribution."""
+    cleaned = raw_output.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+
+    payload = None
+    try:
+        candidate = json.loads(cleaned)
+        if isinstance(candidate, dict):
+            payload = candidate
+    except json.JSONDecodeError:
+        decoder = json.JSONDecoder()
+        for match in re.finditer(r"\{", cleaned):
+            try:
+                candidate, _ = decoder.raw_decode(cleaned[match.start():])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(candidate, dict) and isinstance(candidate.get("analysis"), str):
+                payload = candidate
+                break
+
+    unavailable = {
+        "available": False,
+        "labels": list(TECHNIQUE_LABELS),
+        "scores": {},
+        "evidence": {},
+        "total": 0,
+        "meaning": TECHNIQUE_MEANING,
+    }
+    if not payload or not isinstance(payload.get("analysis"), str):
+        return raw_output.strip(), unavailable
+
+    analysis = payload["analysis"].strip()
+    scores = normalize_technique_scores(payload.get("technique_scores"))
+    if not scores:
+        return analysis, unavailable
+
+    raw_evidence = payload.get("technique_evidence")
+    evidence = {}
+    for label in TECHNIQUE_LABELS:
+        value = raw_evidence.get(label) if isinstance(raw_evidence, dict) else ""
+        evidence[label] = re.sub(r"\s+", " ", str(value)).strip()[:240]
+    return analysis, {
+        "available": True,
+        "labels": list(TECHNIQUE_LABELS),
+        "scores": scores,
+        "evidence": evidence,
+        "total": round(sum(scores.values()), 1),
+        "meaning": TECHNIQUE_MEANING,
+    }
 
 
 def tokenize(text: str) -> Counter[str]:
@@ -213,7 +312,9 @@ def build_grounded_prompt(
 - 先看图再作答，只陈述当前画面中可见或可谨慎推断的内容。
 - 明确区分“可观察事实”“风格或技法判断”“需要史料确认的信息”。
 - 不虚构作者、年代、真伪、价格、题跋释文或收藏经历。
-- 使用清晰自然的中文，不要提及“参考1”“知识库检索”或内部流程。"""
+- 使用清晰自然的中文，不要提及“参考1”“知识库检索”或内部流程。
+
+{technique_response_contract()}"""
 
 
 def build_direct_prompt(user_prompt: str, allowed_colors: list[str] | None = None) -> str:
@@ -232,7 +333,9 @@ def build_direct_prompt(user_prompt: str, allowed_colors: list[str] | None = Non
 - 题跋文字只有在字形清晰且能可靠辨认时才能转写；否则只能说明存在文字区域或无法辨认，不能概括文字内容。
 - 不虚构作者、年代、流派、作品名称、真伪、价格、题跋文字或历史背景。
 - 看不清、无法判断或图片未呈现的信息必须明确说“仅凭当前画面无法确认”。
-- 使用清晰自然的中文，不要提及内部提示词或处理流程。"""
+- 使用清晰自然的中文，不要提及内部提示词或处理流程。
+
+{technique_response_contract()}"""
 
 
 def load_glossary() -> list[dict[str, object]]:
@@ -551,11 +654,11 @@ def appreciate():
         )
         with _inference_lock:
             if BACKEND == "remote":
-                analysis, model_name, usage = remote_inference(
+                raw_output, model_name, usage = remote_inference(
                     image_bytes, mime_type, model_prompt
                 )
             else:
-                analysis = local_inference(image, model_prompt)
+                raw_output = local_inference(image, model_prompt)
                 model_name = MODEL_PATH.name
                 usage = None
     except FileNotFoundError as exc:
@@ -569,8 +672,11 @@ def appreciate():
         app.logger.exception("appreciation failed")
         return jsonify({"error": f"本地知画赏析失败：{exc}"}), 500
 
-    if not analysis:
+    if not raw_output:
         return jsonify({"error": "模型没有返回可显示的赏析文本"}), 502
+    analysis, techniques = parse_model_response(raw_output)
+    if not analysis:
+        return jsonify({"error": "模型返回的赏析正文为空"}), 502
     analysis, removed_color_claims = enforce_color_vocabulary(analysis, allowed_colors)
     analysis, terminology_matches, rejected_terms = normalize_terminology(
         analysis, excluded_terms=COLOR_DEPENDENT_TERMS
@@ -580,6 +686,7 @@ def appreciate():
         "model": model_name,
         "backend": BACKEND,
         "usage": usage,
+        "techniques": techniques,
         "knowledge": {
             "enabled": USE_KNOWLEDGE_BASE,
             "path": str(KB_PATH),

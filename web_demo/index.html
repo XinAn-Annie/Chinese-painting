@@ -263,6 +263,19 @@
         .metric-bar { grid-column:1 / -1; height:5px; background:#d9d8d2; border-radius:0; overflow:hidden; }
         .metric-bar i { display:block; height:100%; background:#33332f; border-radius:0; }
         .metric-description { color:#777771; font-size:.82em; margin:-3px 0 7px; }
+        .technique-module { margin:20px 0 24px; padding:18px; border:1px solid #c9c8c2; border-radius:12px; background:#f7f6f2; }
+        .technique-module h3 { margin:0; font-size:1.18em; }
+        .technique-layout { display:grid; grid-template-columns:minmax(230px,.9fr) minmax(260px,1.1fr); gap:20px; align-items:center; margin-top:14px; }
+        .technique-radar-wrap { min-height:280px; display:flex; align-items:center; justify-content:center; border:1px solid #d9d8d2; border-radius:8px; background:#fbfaf7; }
+        #techniqueRadar { display:block; width:100%; height:auto; max-height:340px; }
+        .technique-bars { display:grid; gap:13px; }
+        .technique-row { display:grid; grid-template-columns:48px minmax(80px,1fr) 58px; gap:10px; align-items:center; color:#343430; }
+        .technique-name { font-weight:700; }
+        .technique-track { height:9px; overflow:hidden; border:1px solid #c9c8c2; background:#efeee9; }
+        .technique-fill { display:block; width:0; height:100%; background:linear-gradient(90deg,#9b735f,#5c3d2e); transition:width .45s ease; }
+        .technique-value { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+        .technique-evidence { grid-column:2 / -1; margin-top:-6px; color:#85847e; font-size:.72em; line-height:1.4; }
+        .technique-status { margin:12px 0 0; color:#777771; font-size:.78em; line-height:1.5; }
         .appreciation-question { width:100%; min-height:92px; margin:14px 0 10px; padding:12px 14px; resize:vertical; border:1px solid #c9c8c2; border-radius:4px; background:#f7f6f2; color:#292925; font:inherit; line-height:1.6; }
         .appreciation-question:focus { outline:2px solid rgba(28,28,26,.18); border-color:#777771; }
         .appreciation-output { min-height:180px; margin-top:16px; padding:18px; border-left:2px solid #777771; background:#f7f6f2; color:#343430; line-height:1.85; white-space:pre-wrap; overflow-wrap:anywhere; }
@@ -291,6 +304,7 @@
                 font-size: 1.8em;
             }
             .ocr-grid, .analysis-panel { grid-template-columns: 1fr; }
+            .technique-layout { grid-template-columns:1fr; }
         }
     </style>
     <script src="seal-detector.js"></script>
@@ -379,6 +393,17 @@
                 <p class="viz-kicker">ZHIHUA VLM · APPRECIATION</p>
                 <h2>国画赏析与知识讲解</h2>
                 <p class="viz-subtitle">由知画视觉语言模型讲解构图、笔墨、设色、意象与审美。可以填写一个关注问题，也可以留空使用审慎的默认赏析提示。</p>
+                <section class="technique-module" aria-labelledby="techniqueTitle">
+                    <h3 id="techniqueTitle">五类技法倾向指数</h3>
+                    <p class="viz-subtitle">由当前配置的 Qwen 模型依据上传画面生成，五项相对占比合计 100%。</p>
+                    <div class="technique-layout">
+                        <div class="technique-radar-wrap">
+                            <canvas id="techniqueRadar" width="680" height="520" role="img" aria-label="五类技法倾向雷达图，等待分析"></canvas>
+                        </div>
+                        <div id="techniqueBars" class="technique-bars" aria-live="polite"></div>
+                    </div>
+                    <p id="techniqueStatus" class="technique-status">完成颜色分析后，点击“请知画赏析”即可同时生成技法五角图和占比。数值表示模型的相对视觉倾向，不是识别概率或学术鉴定。</p>
+                </section>
                 <label for="appreciationPrompt"><strong>可选问题</strong></label>
                 <textarea id="appreciationPrompt" class="appreciation-question" maxlength="2000" placeholder="例如：请重点分析这幅画的构图和用墨。"></textarea>
                 <button class="btn" id="appreciationBtn" disabled>请知画赏析</button>
@@ -850,6 +875,120 @@
         const appreciationStatus = document.getElementById('appreciationStatus');
         const appreciationOutput = document.getElementById('appreciationOutput');
         const appreciationMeta = document.getElementById('appreciationMeta');
+        const techniqueRadar = document.getElementById('techniqueRadar');
+        const techniqueBars = document.getElementById('techniqueBars');
+        const techniqueStatus = document.getElementById('techniqueStatus');
+        const techniqueLabels = ['白描', '工笔', '写意', '泼墨', '没骨'];
+        let currentTechniqueData = null;
+
+        function drawTechniqueRadar(scores = null) {
+            const ctx = techniqueRadar.getContext('2d');
+            const width = techniqueRadar.width;
+            const height = techniqueRadar.height;
+            const centerX = width / 2;
+            const centerY = height / 2 + 8;
+            const radius = Math.min(width, height) * 0.31;
+            const point = (index, ratio = 1) => {
+                const angle = -Math.PI / 2 + index * Math.PI * 2 / techniqueLabels.length;
+                return [centerX + Math.cos(angle) * radius * ratio, centerY + Math.sin(angle) * radius * ratio];
+            };
+            const polygon = (ratio) => {
+                ctx.beginPath();
+                techniqueLabels.forEach((_, index) => {
+                    const [x, y] = point(index, ratio);
+                    if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                });
+                ctx.closePath();
+            };
+
+            ctx.clearRect(0, 0, width, height);
+            ctx.fillStyle = '#fbfaf7';
+            ctx.fillRect(0, 0, width, height);
+            ctx.lineWidth = 1;
+            for (let ring = 1; ring <= 5; ring++) {
+                polygon(ring / 5);
+                ctx.strokeStyle = ring === 5 ? '#a9a8a1' : '#d9d8d2';
+                ctx.stroke();
+            }
+            techniqueLabels.forEach((label, index) => {
+                const [x, y] = point(index);
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(x, y);
+                ctx.strokeStyle = '#d0cfc9';
+                ctx.stroke();
+                const [labelX, labelY] = point(index, 1.18);
+                ctx.fillStyle = '#343430';
+                ctx.font = '700 25px "Microsoft YaHei", sans-serif';
+                ctx.textAlign = labelX < centerX - 8 ? 'right' : labelX > centerX + 8 ? 'left' : 'center';
+                ctx.textBaseline = labelY < centerY ? 'bottom' : 'top';
+                ctx.fillText(label, labelX, labelY);
+            });
+
+            if (scores) {
+                ctx.beginPath();
+                techniqueLabels.forEach((label, index) => {
+                    const ratio = Math.max(0, Math.min(100, Number(scores[label]) || 0)) / 100;
+                    const [x, y] = point(index, ratio);
+                    if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                });
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(92,61,46,.22)';
+                ctx.strokeStyle = '#5c3d2e';
+                ctx.lineWidth = 4;
+                ctx.fill();
+                ctx.stroke();
+                techniqueLabels.forEach((label, index) => {
+                    const ratio = Math.max(0, Math.min(100, Number(scores[label]) || 0)) / 100;
+                    const [x, y] = point(index, ratio);
+                    ctx.beginPath();
+                    ctx.arc(x, y, 6, 0, Math.PI * 2);
+                    ctx.fillStyle = '#5c3d2e';
+                    ctx.fill();
+                });
+            }
+        }
+
+        function renderTechniqueAnalysis(techniques = null, message = '') {
+            const scores = techniques?.available ? techniques.scores : null;
+            currentTechniqueData = scores ? techniques : null;
+            drawTechniqueRadar(scores);
+            techniqueBars.replaceChildren();
+            techniqueLabels.forEach(label => {
+                const value = scores ? Math.max(0, Math.min(100, Number(scores[label]) || 0)) : null;
+                const row = document.createElement('div');
+                row.className = 'technique-row';
+                const name = document.createElement('span');
+                name.className = 'technique-name';
+                name.textContent = label;
+                const track = document.createElement('span');
+                track.className = 'technique-track';
+                const fill = document.createElement('i');
+                fill.className = 'technique-fill';
+                fill.style.width = value === null ? '0%' : `${value}%`;
+                track.appendChild(fill);
+                const number = document.createElement('span');
+                number.className = 'technique-value';
+                number.textContent = value === null ? '— /100' : `${Number(value.toFixed(1))} /100`;
+                row.append(name, track, number);
+                const evidenceText = techniques?.evidence?.[label];
+                if (evidenceText) {
+                    const evidence = document.createElement('small');
+                    evidence.className = 'technique-evidence';
+                    evidence.textContent = evidenceText;
+                    row.appendChild(evidence);
+                }
+                techniqueBars.appendChild(row);
+            });
+            techniqueRadar.setAttribute('aria-label', scores
+                ? `五类技法倾向雷达图：${techniqueLabels.map(label => `${label}${scores[label]}分`).join('，')}`
+                : '五类技法倾向雷达图，等待分析');
+            techniqueStatus.textContent = message || (scores
+                ? (techniques.meaning || '五项为模型相对倾向，总计 100%；不是识别概率或学术鉴定。')
+                : '完成颜色分析后，点击“请知画赏析”即可同时生成技法五角图和占比。数值表示模型的相对视觉倾向，不是识别概率或学术鉴定。');
+        }
+
+        renderTechniqueAnalysis();
 
         uploadArea.addEventListener('click', () => imageInput.click());
         uploadArea.addEventListener('dragover', (e) => {
@@ -879,6 +1018,7 @@
             extractedColors = [];
             matchedColors = [];
             appreciationBtn.disabled = true;
+            renderTechniqueAnalysis(null, '图片已更新；完成颜色分析并请求知画赏析后，将生成新的技法倾向。');
             const reader = new FileReader();
             reader.onload = (e) => {
                 imagePreview.src = e.target.result;
@@ -1164,6 +1304,7 @@
             appreciationStatus.textContent = '正在调用知画模型，请稍候…';
             appreciationOutput.textContent = '正在生成国画赏析…';
             appreciationMeta.textContent = '模型生成内容仅供学习参考。';
+            renderTechniqueAnalysis(null, 'Qwen 正在观察画面并计算五类技法相对倾向…');
             try {
                 const form = new FormData();
                 form.append('image', selectedFile, selectedFile.name || 'painting.jpg');
@@ -1178,6 +1319,12 @@
                 if (!response.ok) throw new Error(data.error || `服务返回 HTTP ${response.status}`);
                 appreciationOutput.textContent = data.analysis;
                 appreciationStatus.textContent = '知画赏析已完成';
+                renderTechniqueAnalysis(
+                    data.techniques,
+                    data.techniques?.available
+                        ? (data.techniques.meaning || '')
+                        : '本次模型没有返回完整的五类技法评分；赏析正文仍可正常查看。'
+                );
                 const sourceText = data.knowledge?.enabled
                     ? `已检索 ${data.knowledge.retrieved ?? 0} 条 ZhiHua_QA 参考`
                     : '未连接作品知识库，直接分析画面';
@@ -1192,6 +1339,7 @@
             } catch (error) {
                 appreciationOutput.textContent = '本次未生成赏析。';
                 appreciationStatus.textContent = `知画赏析未完成：${error.message}。请确认本地 8006 服务已启动。`;
+                renderTechniqueAnalysis(null, '技法倾向未生成，请确认本地知画服务正常后重试。');
             } finally {
                 appreciationBtn.disabled = false;
             }
