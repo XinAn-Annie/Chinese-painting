@@ -11,8 +11,12 @@ from flask_cors import CORS
 
 from paddle_ocr_adapter import (
     AncientPaintingOCR,
+    DEFAULT_TEXT_DETECTION_MODEL,
+    DEFAULT_TEXT_DETECTION_MODEL_DIR,
     DEFAULT_TEXT_RECOGNITION_MODEL,
     DEFAULT_TEXT_RECOGNITION_MODEL_DIR,
+    DEFAULT_TEXTLINE_ORIENTATION_MODEL,
+    DEFAULT_TEXTLINE_ORIENTATION_MODEL_DIR,
 )
 
 app = Flask(__name__)
@@ -37,6 +41,22 @@ def health():
                 str(DEFAULT_TEXT_RECOGNITION_MODEL_DIR),
             )
         ),
+        "text_detection_model": (
+            ocr.text_detection_model_name if ocr is not None
+            else os.getenv("OCR_TEXT_DETECTION_MODEL", DEFAULT_TEXT_DETECTION_MODEL)
+        ),
+        "text_detection_model_dir": (
+            str(ocr.text_detection_model_dir) if ocr is not None
+            else os.getenv("OCR_TEXT_DETECTION_MODEL_DIR", str(DEFAULT_TEXT_DETECTION_MODEL_DIR))
+        ),
+        "textline_orientation_model": (
+            ocr.textline_orientation_model_name if ocr is not None
+            else os.getenv("OCR_TEXTLINE_ORIENTATION_MODEL", DEFAULT_TEXTLINE_ORIENTATION_MODEL)
+        ),
+        "textline_orientation_model_dir": (
+            str(ocr.textline_orientation_model_dir) if ocr is not None
+            else os.getenv("OCR_TEXTLINE_ORIENTATION_MODEL_DIR", str(DEFAULT_TEXTLINE_ORIENTATION_MODEL_DIR))
+        ),
     })
 
 
@@ -59,6 +79,18 @@ def recognize():
                 text_recognition_model_dir=os.getenv(
                     "OCR_TEXT_RECOGNITION_MODEL_DIR",
                     str(DEFAULT_TEXT_RECOGNITION_MODEL_DIR),
+                ),
+                text_detection_model_name=os.getenv(
+                    "OCR_TEXT_DETECTION_MODEL", DEFAULT_TEXT_DETECTION_MODEL
+                ),
+                text_detection_model_dir=os.getenv(
+                    "OCR_TEXT_DETECTION_MODEL_DIR", str(DEFAULT_TEXT_DETECTION_MODEL_DIR)
+                ),
+                textline_orientation_model_name=os.getenv(
+                    "OCR_TEXTLINE_ORIENTATION_MODEL", DEFAULT_TEXTLINE_ORIENTATION_MODEL
+                ),
+                textline_orientation_model_dir=os.getenv(
+                    "OCR_TEXTLINE_ORIENTATION_MODEL_DIR", str(DEFAULT_TEXTLINE_ORIENTATION_MODEL_DIR)
                 ),
                 min_confidence=float(os.getenv("OCR_MIN_CONFIDENCE", "0.60")),
             )

@@ -32,9 +32,14 @@ MODEL_DIR = ROOT / ".models" / "Qwen2.5-VL-3B-Instruct"
 OCR_MODEL_DIR = ROOT / ".models" / "PP-OCRv5_server_rec_hcsu_stage1"
 OCR_MODEL_ASSET = "PP-OCRv5_server_rec_hcsu_stage1.zip"
 OCR_MODEL_SHA256 = "9ec5ee6d3fd85e1cd528db0cca8c605c21d736c51a07fa8a682c844530dd11ad"
-OCR_MODEL_URL = (
-    "https://github.com/XinAn-Annie/Chinese-painting/"
-    f"releases/latest/download/{OCR_MODEL_ASSET}"
+OCR_DETECTION_MODEL_DIR = ROOT / ".models" / "PP-OCRv6_medium_det"
+OCR_DETECTION_MODEL_ASSET = "PP-OCRv6_medium_det.zip"
+OCR_DETECTION_MODEL_SHA256 = "4890564ed35b62ff7ccf446bcd4c95d0c8cc95382baa2cd8f978ea1992e30295"
+OCR_ORIENTATION_MODEL_DIR = ROOT / ".models" / "PP-LCNet_x1_0_textline_ori"
+OCR_ORIENTATION_MODEL_ASSET = "PP-LCNet_x1_0_textline_ori.zip"
+OCR_ORIENTATION_MODEL_SHA256 = "7d9384b4445c25f5919eaa10ddc4b3b3f9ff298f77d9eb738e34f8b53808aff5"
+RELEASE_DOWNLOAD_BASE = (
+    "https://github.com/XinAn-Annie/Chinese-painting/releases/latest/download"
 )
 LOG_DIR = ROOT / ".local_logs"
 LOCK_PATH = ROOT / ".startup.lock"
@@ -193,21 +198,30 @@ def ocr_model_is_complete(path: Path) -> bool:
     return all((path / name).is_file() and (path / name).stat().st_size > 0 for name in required)
 
 
-def ensure_ocr_model() -> Path:
-    """Download and verify the fine-tuned recognizer from a GitHub Release."""
-    configured = os.getenv("OCR_TEXT_RECOGNITION_MODEL_DIR", "").strip()
-    target = Path(configured).expanduser().resolve() if configured else OCR_MODEL_DIR
+def ensure_ocr_model(
+    *,
+    label: str,
+    target: Path,
+    asset: str,
+    sha256: str,
+    directory_env: str,
+    url_env: str,
+) -> Path:
+    """Download and verify one PaddleOCR model from the GitHub Release."""
+    configured = os.getenv(directory_env, "").strip()
+    target = Path(configured).expanduser().resolve() if configured else target
     if ocr_model_is_complete(target):
-        print(f"[复用] 书法 OCR 微调模型：{target}")
+        print(f"[复用] {label}：{target}")
         return target
 
-    url = os.getenv("OCR_MODEL_URL", OCR_MODEL_URL).strip()
+    default_url = f"{RELEASE_DOWNLOAD_BASE}/{asset}"
+    url = os.getenv(url_env, default_url).strip()
     if not url:
-        raise RuntimeError("未配置 OCR_MODEL_URL，无法下载书法 OCR 微调模型。")
-    download = ROOT / ".models" / (OCR_MODEL_ASSET + ".part")
-    staging = ROOT / ".models" / ".ocr_model_staging"
+        raise RuntimeError(f"未配置 {url_env}，无法下载{label}。")
+    download = ROOT / ".models" / (asset + ".part")
+    staging = ROOT / ".models" / f".{target.name}_staging"
     download.parent.mkdir(parents=True, exist_ok=True)
-    print("[模型] 正在从 GitHub Release 下载书法 OCR 微调模型（约 76 MB）……", flush=True)
+    print(f"[模型] 正在从 GitHub Release 下载{label}……", flush=True)
     headers = {"User-Agent": "ArtGenome-Launcher/1.0"}
     github_token = os.getenv("GITHUB_TOKEN", "").strip()
     if github_token:
@@ -221,12 +235,12 @@ def ensure_ocr_model() -> Path:
                 digest.update(chunk)
     except Exception as exc:
         download.unlink(missing_ok=True)
-        raise RuntimeError(f"OCR 模型下载失败：{url}\n{exc}") from exc
+        raise RuntimeError(f"{label}下载失败：{url}\n{exc}") from exc
 
     actual = digest.hexdigest()
-    if actual.lower() != OCR_MODEL_SHA256:
+    if actual.lower() != sha256:
         download.unlink(missing_ok=True)
-        raise RuntimeError(f"OCR 模型校验失败：期望 {OCR_MODEL_SHA256}，实际 {actual}")
+        raise RuntimeError(f"{label}校验失败：期望 {sha256}，实际 {actual}")
 
     shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir(parents=True)
@@ -234,14 +248,14 @@ def ensure_ocr_model() -> Path:
         expected = {"inference.json", "inference.pdiparams", "inference.yml"}
         members = {Path(name).as_posix() for name in archive.namelist() if not name.endswith("/")}
         if members != expected:
-            raise RuntimeError(f"OCR 模型压缩包内容不符合预期：{sorted(members)}")
+            raise RuntimeError(f"{label}压缩包内容不符合预期：{sorted(members)}")
         archive.extractall(staging)
     if not ocr_model_is_complete(staging):
-        raise RuntimeError("OCR 模型解压后完整性检查失败。")
+        raise RuntimeError(f"{label}解压后完整性检查失败。")
     shutil.rmtree(target, ignore_errors=True)
     staging.replace(target)
     download.unlink(missing_ok=True)
-    print(f"[模型] 书法 OCR 微调模型已就绪：{target}")
+    print(f"[模型] {label}已就绪：{target}")
     return target
 
 
@@ -344,7 +358,30 @@ def main() -> int:
     if sys.version_info < (3, 10):
         raise RuntimeError("需要 Python 3.10 或更高版本，请先安装 64 位 Python。")
     ensure_environment()
-    ocr_model_path = ensure_ocr_model()
+    ocr_model_path = ensure_ocr_model(
+        label="书法 OCR 微调识别模型",
+        target=OCR_MODEL_DIR,
+        asset=OCR_MODEL_ASSET,
+        sha256=OCR_MODEL_SHA256,
+        directory_env="OCR_TEXT_RECOGNITION_MODEL_DIR",
+        url_env="OCR_MODEL_URL",
+    )
+    ocr_detection_model_path = ensure_ocr_model(
+        label="PaddleOCR 文字检测模型",
+        target=OCR_DETECTION_MODEL_DIR,
+        asset=OCR_DETECTION_MODEL_ASSET,
+        sha256=OCR_DETECTION_MODEL_SHA256,
+        directory_env="OCR_TEXT_DETECTION_MODEL_DIR",
+        url_env="OCR_DETECTION_MODEL_URL",
+    )
+    ocr_orientation_model_path = ensure_ocr_model(
+        label="PaddleOCR 文字方向模型",
+        target=OCR_ORIENTATION_MODEL_DIR,
+        asset=OCR_ORIENTATION_MODEL_ASSET,
+        sha256=OCR_ORIENTATION_MODEL_SHA256,
+        directory_env="OCR_TEXTLINE_ORIENTATION_MODEL_DIR",
+        url_env="OCR_ORIENTATION_MODEL_URL",
+    )
     model_path = ensure_qwen_model()
     service_env = os.environ.copy()
     service_env.update({
@@ -352,6 +389,8 @@ def main() -> int:
         "ZHIHUA_USE_KB": "0",
         "ZHIHUA_MODEL_PATH": str(model_path),
         "OCR_TEXT_RECOGNITION_MODEL_DIR": str(ocr_model_path),
+        "OCR_TEXT_DETECTION_MODEL_DIR": str(ocr_detection_model_path),
+        "OCR_TEXTLINE_ORIENTATION_MODEL_DIR": str(ocr_orientation_model_path),
     })
 
     ensure_service("inscription_detector", DETECTOR_PORT, [str(VENV_PYTHON), str(ROOT / "mcp_services" / "inscription_detector" / "server.py")], ROOT, 120, service_env)

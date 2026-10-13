@@ -20,11 +20,18 @@ from pathlib import Path
 from typing import Any
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TEXT_RECOGNITION_MODEL = "PP-OCRv5_server_rec"
+DEFAULT_TEXT_DETECTION_MODEL = "PP-OCRv6_medium_det"
+DEFAULT_TEXTLINE_ORIENTATION_MODEL = "PP-LCNet_x1_0_textline_ori"
 DEFAULT_TEXT_RECOGNITION_MODEL_DIR = (
-    Path(__file__).resolve().parents[2]
-    / ".models"
-    / "PP-OCRv5_server_rec_hcsu_stage1"
+    PROJECT_ROOT / ".models" / "PP-OCRv5_server_rec_hcsu_stage1"
+)
+DEFAULT_TEXT_DETECTION_MODEL_DIR = (
+    PROJECT_ROOT / ".models" / "PP-OCRv6_medium_det"
+)
+DEFAULT_TEXTLINE_ORIENTATION_MODEL_DIR = (
+    PROJECT_ROOT / ".models" / "PP-LCNet_x1_0_textline_ori"
 )
 
 
@@ -139,6 +146,10 @@ class AncientPaintingOCR:
         self,
         text_recognition_model_name: str = DEFAULT_TEXT_RECOGNITION_MODEL,
         text_recognition_model_dir: str | Path | None = DEFAULT_TEXT_RECOGNITION_MODEL_DIR,
+        text_detection_model_name: str = DEFAULT_TEXT_DETECTION_MODEL,
+        text_detection_model_dir: str | Path | None = DEFAULT_TEXT_DETECTION_MODEL_DIR,
+        textline_orientation_model_name: str = DEFAULT_TEXTLINE_ORIENTATION_MODEL,
+        textline_orientation_model_dir: str | Path | None = DEFAULT_TEXTLINE_ORIENTATION_MODEL_DIR,
         min_confidence: float = 0.60,
     ):
         _preload_torch_windows_dependencies()
@@ -151,15 +162,31 @@ class AncientPaintingOCR:
 
         self.min_confidence = min_confidence
         self.text_recognition_model_name = text_recognition_model_name
+        self.text_detection_model_name = text_detection_model_name
+        self.textline_orientation_model_name = textline_orientation_model_name
         self.text_recognition_model_dir = (
             Path(text_recognition_model_dir).resolve()
             if text_recognition_model_dir
             else None
         )
-        if self.text_recognition_model_dir and not self.text_recognition_model_dir.exists():
-            raise FileNotFoundError(f"微调识别模型不存在: {self.text_recognition_model_dir}")
+        self.text_detection_model_dir = (
+            Path(text_detection_model_dir).resolve() if text_detection_model_dir else None
+        )
+        self.textline_orientation_model_dir = (
+            Path(textline_orientation_model_dir).resolve()
+            if textline_orientation_model_dir else None
+        )
+        for label, path in (
+            ("微调识别模型", self.text_recognition_model_dir),
+            ("文字检测模型", self.text_detection_model_dir),
+            ("文字方向模型", self.textline_orientation_model_dir),
+        ):
+            if path and not path.exists():
+                raise FileNotFoundError(f"{label}不存在: {path}")
         options = {
+            "text_detection_model_name": text_detection_model_name,
             "text_recognition_model_name": text_recognition_model_name,
+            "textline_orientation_model_name": textline_orientation_model_name,
             "use_doc_orientation_classify": False,
             "use_doc_unwarping": False,
             "use_textline_orientation": True,
@@ -170,6 +197,10 @@ class AncientPaintingOCR:
         }
         if self.text_recognition_model_dir:
             options["text_recognition_model_dir"] = str(self.text_recognition_model_dir)
+        if self.text_detection_model_dir:
+            options["text_detection_model_dir"] = str(self.text_detection_model_dir)
+        if self.textline_orientation_model_dir:
+            options["textline_orientation_model_dir"] = str(self.textline_orientation_model_dir)
         try:
             self.engine = PaddleOCR(**options)
         except TypeError as exc:
