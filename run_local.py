@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import atexit
 import hashlib
+import html
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -14,6 +16,7 @@ import time
 import urllib.request
 import webbrowser
 import zipfile
+from urllib.parse import urljoin
 from pathlib import Path
 from statistics import median
 
@@ -100,7 +103,7 @@ def requirements_hash() -> str:
 
 
 def select_fastest_pip_index(timeout: float = 8.0, attempts: int = 2) -> str:
-    """实测候选 PyPI 索引，返回当前网络下响应最快的可用源。"""
+    """实测候选索引的实际 wheel 吞吐，返回当前网络下最快的可用源。"""
     candidates = list(PIP_INDEX_CANDIDATES)
     configured = os.getenv("PIP_INDEX_URL", "").strip()
     if configured and all(url.rstrip("/") != configured.rstrip("/") for _, url in candidates):
@@ -112,7 +115,6 @@ def select_fastest_pip_index(timeout: float = 8.0, attempts: int = 2) -> str:
         samples: list[float] = []
         probe_url = base_url.rstrip("/") + "/pip/"
         for _ in range(attempts):
-            started = time.monotonic()
             try:
                 request = urllib.request.Request(
                     probe_url,
@@ -121,16 +123,34 @@ def select_fastest_pip_index(timeout: float = 8.0, attempts: int = 2) -> str:
                 with urllib.request.urlopen(request, timeout=timeout) as response:
                     if response.status != 200:
                         raise RuntimeError(f"HTTP {response.status}")
-                    response.read(128 * 1024)
-                samples.append(time.monotonic() - started)
+                    page = response.read().decode("utf-8", errors="replace")
+                links = re.findall(r'''href=["']([^"']+)["']''', page, flags=re.IGNORECASE)
+                wheel = next((html.unescape(urljoin(probe_url, link.split("#", 1)[0]))
+                              for link in links
+                              if ".whl" in link and "pip-" in link.lower()), None)
+                if not wheel:
+                    raise RuntimeError("未找到可测速的 pip wheel")
+                started = time.monotonic()
+                probe = urllib.request.Request(
+                    wheel,
+                    headers={
+                        "User-Agent": "Zhihua-Launcher/1.0",
+                        "Range": "bytes=0-1048575",
+                    },
+                )
+                with urllib.request.urlopen(probe, timeout=timeout) as response:
+                    payload = response.read(1024 * 1024)
+                if len(payload) < 128 * 1024:
+                    raise RuntimeError("测速文件过小")
+                samples.append(len(payload) / max(time.monotonic() - started, 0.001))
             except Exception:
                 samples = []
                 break
 
         if samples:
-            elapsed = median(samples)
-            results.append((elapsed, name, base_url))
-            print(f"[测速] {name}: {elapsed:.2f} 秒", flush=True)
+            throughput = median(samples)
+            results.append((-throughput, name, base_url))
+            print(f"[测速] {name}: {throughput / (1024 ** 2):.2f} MiB/s", flush=True)
         else:
             print(f"[测速] {name}: 不可用", flush=True)
 
@@ -139,8 +159,11 @@ def select_fastest_pip_index(timeout: float = 8.0, attempts: int = 2) -> str:
         print(f"[测速] 所有测速请求均失败，回退至：{fallback}", flush=True)
         return fallback
 
-    elapsed, name, selected = min(results)
-    print(f"[测速] 已选择 {name}：{selected}（{elapsed:.2f} 秒）", flush=True)
+    negative_throughput, name, selected = min(results)
+    print(
+        f"[测速] 已选择 {name}：{selected}（{-negative_throughput / (1024 ** 2):.2f} MiB/s）",
+        flush=True,
+    )
     return selected
 
 
