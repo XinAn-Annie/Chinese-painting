@@ -39,7 +39,8 @@ OCR_ORIENTATION_MODEL_DIR = ROOT / ".models" / "PP-LCNet_x1_0_textline_ori"
 OCR_ORIENTATION_MODEL_ASSET = "PP-LCNet_x1_0_textline_ori.zip"
 OCR_ORIENTATION_MODEL_SHA256 = "7d9384b4445c25f5919eaa10ddc4b3b3f9ff298f77d9eb738e34f8b53808aff5"
 RELEASE_DOWNLOAD_BASE = (
-    "https://github.com/XinAn-Annie/Chinese-painting/releases/latest/download"
+    "https://github.com/XinAn-Annie/Chinese-painting/"
+    "releases/download/ocr-model-v1.0.0"
 )
 LOG_DIR = ROOT / ".local_logs"
 LOCK_PATH = ROOT / ".startup.lock"

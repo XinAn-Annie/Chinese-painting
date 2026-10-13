@@ -1,6 +1,6 @@
 # 本地国画赏析与知识讲解服务
 
-该服务默认在本机加载 `Qwen2.5-VL-3B-Instruct`，直接根据上传画面生成审慎分析，不把知识库问答内容交给模型。模型回答完成后，服务只使用受控术语表做确定性的术语规范化；颜色描述则严格受上方颜色识别结果约束。网页只把图片发送到本机 `127.0.0.1:8006`，不需要 API Key。
+该服务默认在本机加载 `Qwen2.5-VL-3B-Instruct`，直接根据上传画面生成审慎分析，不把知识库问答内容交给模型。模型回答完成后，服务只使用受控术语表做确定性的术语规范化；颜色描述则严格受上方颜色识别结果约束。网页只把图片发送到本机 `127.0.0.1:8006`，不需要 API Key。本项目和随项目提供的 Qwen 备用权重仅用于非商业研究、学习与评估。
 
 ## 默认本机路径
 
@@ -14,7 +14,7 @@
 
 ## 启动
 
-普通用户直接双击项目根目录的 `启动画基因_Google.bat` 或 `启动画基因_Edge.bat`。首次运行会创建虚拟环境、安装依赖，并从 ModelScope 自动下载模型。若只调试知画服务，可在首次安装完成后运行：
+普通用户直接双击项目根目录的 `启动画基因_Google.bat` 或 `启动画基因_Edge.bat`。首次运行会创建虚拟环境、安装依赖，并优先从 ModelScope 自动下载模型；如果 ModelScope 失败，下载器会自动切换到 GitHub Release 分卷，支持续传、逐卷 SHA256 校验、合并和整文件复核。若只调试知画服务，可在首次安装完成后运行：
 
 ```powershell
 cd .\mcp_services\zhihua
@@ -31,6 +31,8 @@ cd .\mcp_services\zhihua
 
 随后打开 `web_demo/index.html`，上传画作并点击“请知画赏析”。
 
+`POST /api/appreciate` 会在赏析正文之外返回 `techniques`：其中 `scores` 固定包含白描、工笔、写意、泼墨、没骨五项，服务端校验并归一化为总计 100%；`evidence` 保存模型给出的简短画面依据。`available: false` 表示模型本次未返回完整的结构化评分，网页会保留正文并显示重试提示。
+
 ## 可选配置
 
 可通过环境变量调整：
@@ -39,6 +41,8 @@ cd .\mcp_services\zhihua
 - `ZHIHUA_USE_KB=1`：重新启用 `ZhiHua_QA` 检索；默认关闭。
 - `ZHIHUA_RAG_TOP_K`：检索知识条数，默认 3。
 - `ZHIHUA_MODEL_PATH`：覆盖本地模型目录。
+- `ZHIHUA_MODEL_SOURCE=auto|modelscope|github`：选择模型下载源；默认 `auto`，即 ModelScope 失败后切换 GitHub。
+- `ZHIHUA_GITHUB_MODEL_BASE_URL`：覆盖 GitHub Release 分卷的基础地址。
 - `ZHIHUA_KB_PATH`：覆盖知识库 TSV 路径。
 - `ZHIHUA_GLOSSARY_PATH`：覆盖受控术语 JSON 路径。
 - `ZHIHUA_COLOR_DB_PATH`：覆盖用于校验颜色名称的传统色 JSON 路径。

@@ -1,0 +1,46 @@
+{
+  "model": "Qwen/Qwen2.5-VL-3B-Instruct",
+  "release_tag": "qwen-model-v1.0.0",
+  "base_url": "https://github.com/XinAn-Annie/Chinese-painting/releases/download/qwen-model-v1.0.0",
+  "metadata": {
+    "asset": "Qwen2.5-VL-3B-Instruct-metadata.zip",
+    "size": 3824094,
+    "sha256": "bff81fa4bc86f6f53ecd6d6db17718a4d766a11cda476e0aed687d2d1920e645"
+  },
+  "shards": [
+    {
+      "filename": "model-00001-of-00002.safetensors",
+      "size": 3982649232,
+      "sha256": "41a8895c164b4d32bae6b302f4603fcbc1797f32dafa45c7e9bcda23c6755df8",
+      "parts": [
+        {
+          "asset": "model-00001-of-00002.safetensors.part01",
+          "size": 1992294400,
+          "sha256": "de8390bba58a41ad79d793277d795cf9d7f6325e6ebefa76deb5c1782433f5ea"
+        },
+        {
+          "asset": "model-00001-of-00002.safetensors.part02",
+          "size": 1990354832,
+          "sha256": "38273b19d59f6439a6dd473ae9181c73fd8feceb1b1d6ae0806a4a747e54dc26"
+        }
+      ]
+    },
+    {
+      "filename": "model-00002-of-00002.safetensors",
+      "size": 3526688744,
+      "sha256": "365531ff8752420e89dee707b79d021fb2d6e25abafe486f080555a4fe6972e4",
+      "parts": [
+        {
+          "asset": "model-00002-of-00002.safetensors.part01",
+          "size": 1992294400,
+          "sha256": "831b1f48cdb386b035f2be780d65b9d0ef6d3bbaabcf6f1dda8aa4bc15bc4aec"
+        },
+        {
+          "asset": "model-00002-of-00002.safetensors.part02",
+          "size": 1534394344,
+          "sha256": "f8c6e89627ecf790199c6b366aa459cd1f16f5beb29233f78fd4441092be6977"
+        }
+      ]
+    }
+  ]
+}
