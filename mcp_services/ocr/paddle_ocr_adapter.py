@@ -11,10 +11,39 @@ PaddleOCR 的不同版本返回结构不同，本文件同时兼容 3.x predict 
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
+import os
 import re
+import sys
 from pathlib import Path
 from typing import Any
+
+
+DEFAULT_TEXT_RECOGNITION_MODEL = "PP-OCRv5_server_rec"
+DEFAULT_TEXT_RECOGNITION_MODEL_DIR = (
+    Path(__file__).resolve().parents[2]
+    / ".models"
+    / "PP-OCRv5_server_rec_hcsu_stage1"
+)
+
+
+def _preload_torch_windows_dependencies() -> None:
+    """Work around PyTorch DLL load-order failures in the shared Windows venv.
+
+    PaddleX imports ModelScope, which imports PyTorch even though the OCR model
+    itself uses PaddlePaddle.  Loading these CPU DLLs in dependency order keeps
+    that optional import from preventing PaddleOCR startup.
+    """
+    if os.name != "nt":
+        return
+    torch_lib = Path(sys.prefix) / "Lib" / "site-packages" / "torch" / "lib"
+    if not torch_lib.exists():
+        return
+    for filename in ("c10.dll", "torch_global_deps.dll", "torch_cpu.dll", "shm.dll"):
+        dll = torch_lib / filename
+        if dll.exists():
+            ctypes.WinDLL(str(dll))
 
 
 def _box_to_xyxy(box: Any) -> list[float]:
@@ -102,11 +131,17 @@ def _parse_old_result(result: Any) -> list[dict[str, Any]]:
 class AncientPaintingOCR:
     """PaddleOCR 封装。
 
-    ``lang`` 优先使用 ``chinese_cht``，以兼容繁体中文；若本地安装的
-    PaddleOCR 版本不接受该名称，会自动回退到 ``ch``，并在运行日志中提示。
+    默认明确使用 ``PP-OCRv5_server_rec``，覆盖简体、繁体、手写、竖排、
+    生僻字等多场景中文识别。模型权重由 PaddleOCR 在首次运行时下载。
     """
 
-    def __init__(self, lang: str = "chinese_cht", min_confidence: float = 0.60):
+    def __init__(
+        self,
+        text_recognition_model_name: str = DEFAULT_TEXT_RECOGNITION_MODEL,
+        text_recognition_model_dir: str | Path | None = DEFAULT_TEXT_RECOGNITION_MODEL_DIR,
+        min_confidence: float = 0.60,
+    ):
+        _preload_torch_windows_dependencies()
         try:
             from paddleocr import PaddleOCR
         except ImportError as exc:
@@ -115,9 +150,16 @@ class AncientPaintingOCR:
             ) from exc
 
         self.min_confidence = min_confidence
-        self.lang = lang
+        self.text_recognition_model_name = text_recognition_model_name
+        self.text_recognition_model_dir = (
+            Path(text_recognition_model_dir).resolve()
+            if text_recognition_model_dir
+            else None
+        )
+        if self.text_recognition_model_dir and not self.text_recognition_model_dir.exists():
+            raise FileNotFoundError(f"微调识别模型不存在: {self.text_recognition_model_dir}")
         options = {
-            "lang": lang,
+            "text_recognition_model_name": text_recognition_model_name,
             "use_doc_orientation_classify": False,
             "use_doc_unwarping": False,
             "use_textline_orientation": True,
@@ -126,16 +168,15 @@ class AncientPaintingOCR:
             # 关闭它仍使用同一 OCR 模型，但走稳定的 CPU 推理路径。
             "enable_mkldnn": False,
         }
+        if self.text_recognition_model_dir:
+            options["text_recognition_model_dir"] = str(self.text_recognition_model_dir)
         try:
             self.engine = PaddleOCR(**options)
-        except Exception:
-            # 兼容旧版 PaddleOCR；不要因为新参数不可用而阻塞项目原型。
-            try:
-                self.engine = PaddleOCR(lang=lang)
-            except Exception:
-                # 部分版本把繁体中文模型名称收敛为 ch；由调用者在结果中保留原文。
-                self.lang = "ch"
-                self.engine = PaddleOCR(lang="ch")
+        except TypeError as exc:
+            raise RuntimeError(
+                "当前 PaddleOCR 不支持显式指定文字识别模型；请安装项目要求的 "
+                "PaddleOCR 3.x。"
+            ) from exc
 
     def recognize(self, image: str | Path) -> list[dict[str, Any]]:
         image = str(image)
@@ -165,10 +206,25 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="使用 PaddleOCR 识别古画题跋并输出 JSON")
     parser.add_argument("image", help="古画图片路径")
     parser.add_argument("-o", "--output", help="结果 JSON 路径；不填写则输出到终端")
-    parser.add_argument("--lang", default="chinese_cht", help="PaddleOCR 语言模型，默认 chinese_cht")
+    parser.add_argument(
+        "--rec-model",
+        default=DEFAULT_TEXT_RECOGNITION_MODEL,
+        help=f"PaddleOCR 文字识别模型，默认 {DEFAULT_TEXT_RECOGNITION_MODEL}",
+    )
+    parser.add_argument(
+        "--rec-model-dir",
+        default=str(DEFAULT_TEXT_RECOGNITION_MODEL_DIR),
+        help="本地微调识别模型目录",
+    )
     parser.add_argument("--min-confidence", type=float, default=0.60)
     args = parser.parse_args()
-    results = recognize_file(args.image, args.output, lang=args.lang, min_confidence=args.min_confidence)
+    results = recognize_file(
+        args.image,
+        args.output,
+        text_recognition_model_name=args.rec_model,
+        text_recognition_model_dir=args.rec_model_dir,
+        min_confidence=args.min_confidence,
+    )
     if not args.output:
         print(json.dumps(results, ensure_ascii=False, indent=2))
 
