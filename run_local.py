@@ -13,6 +13,7 @@ import sys
 import time
 import urllib.request
 import webbrowser
+import zipfile
 from pathlib import Path
 from statistics import median
 
@@ -28,6 +29,13 @@ VENV_PYTHON = VENV_DIR / "Scripts" / "python.exe"
 REQUIREMENTS = ROOT / "requirements-local.txt"
 INSTALL_MARKER = VENV_DIR / ".installed-requirements.sha256"
 MODEL_DIR = ROOT / ".models" / "Qwen2.5-VL-3B-Instruct"
+OCR_MODEL_DIR = ROOT / ".models" / "PP-OCRv5_server_rec_hcsu_stage1"
+OCR_MODEL_ASSET = "PP-OCRv5_server_rec_hcsu_stage1.zip"
+OCR_MODEL_SHA256 = "9ec5ee6d3fd85e1cd528db0cca8c605c21d736c51a07fa8a682c844530dd11ad"
+OCR_MODEL_URL = (
+    "https://github.com/XinAn-Annie/Chinese-painting/"
+    f"releases/latest/download/{OCR_MODEL_ASSET}"
+)
 LOG_DIR = ROOT / ".local_logs"
 LOCK_PATH = ROOT / ".startup.lock"
 CHILDREN: list[tuple[subprocess.Popen, object]] = []
@@ -180,6 +188,63 @@ def ensure_environment() -> None:
     INSTALL_MARKER.write_text(expected, encoding="utf-8")
 
 
+def ocr_model_is_complete(path: Path) -> bool:
+    required = ("inference.json", "inference.pdiparams", "inference.yml")
+    return all((path / name).is_file() and (path / name).stat().st_size > 0 for name in required)
+
+
+def ensure_ocr_model() -> Path:
+    """Download and verify the fine-tuned recognizer from a GitHub Release."""
+    configured = os.getenv("OCR_TEXT_RECOGNITION_MODEL_DIR", "").strip()
+    target = Path(configured).expanduser().resolve() if configured else OCR_MODEL_DIR
+    if ocr_model_is_complete(target):
+        print(f"[复用] 书法 OCR 微调模型：{target}")
+        return target
+
+    url = os.getenv("OCR_MODEL_URL", OCR_MODEL_URL).strip()
+    if not url:
+        raise RuntimeError("未配置 OCR_MODEL_URL，无法下载书法 OCR 微调模型。")
+    download = ROOT / ".models" / (OCR_MODEL_ASSET + ".part")
+    staging = ROOT / ".models" / ".ocr_model_staging"
+    download.parent.mkdir(parents=True, exist_ok=True)
+    print("[模型] 正在从 GitHub Release 下载书法 OCR 微调模型（约 76 MB）……", flush=True)
+    headers = {"User-Agent": "ArtGenome-Launcher/1.0"}
+    github_token = os.getenv("GITHUB_TOKEN", "").strip()
+    if github_token:
+        headers["Authorization"] = f"Bearer {github_token}"
+    request = urllib.request.Request(url, headers=headers)
+    digest = hashlib.sha256()
+    try:
+        with urllib.request.urlopen(request, timeout=180) as response, download.open("wb") as stream:
+            while chunk := response.read(1024 * 1024):
+                stream.write(chunk)
+                digest.update(chunk)
+    except Exception as exc:
+        download.unlink(missing_ok=True)
+        raise RuntimeError(f"OCR 模型下载失败：{url}\n{exc}") from exc
+
+    actual = digest.hexdigest()
+    if actual.lower() != OCR_MODEL_SHA256:
+        download.unlink(missing_ok=True)
+        raise RuntimeError(f"OCR 模型校验失败：期望 {OCR_MODEL_SHA256}，实际 {actual}")
+
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True)
+    with zipfile.ZipFile(download) as archive:
+        expected = {"inference.json", "inference.pdiparams", "inference.yml"}
+        members = {Path(name).as_posix() for name in archive.namelist() if not name.endswith("/")}
+        if members != expected:
+            raise RuntimeError(f"OCR 模型压缩包内容不符合预期：{sorted(members)}")
+        archive.extractall(staging)
+    if not ocr_model_is_complete(staging):
+        raise RuntimeError("OCR 模型解压后完整性检查失败。")
+    shutil.rmtree(target, ignore_errors=True)
+    staging.replace(target)
+    download.unlink(missing_ok=True)
+    print(f"[模型] 书法 OCR 微调模型已就绪：{target}")
+    return target
+
+
 def model_is_complete(path: Path) -> bool:
     required = [
         path / "config.json",
@@ -279,9 +344,15 @@ def main() -> int:
     if sys.version_info < (3, 10):
         raise RuntimeError("需要 Python 3.10 或更高版本，请先安装 64 位 Python。")
     ensure_environment()
+    ocr_model_path = ensure_ocr_model()
     model_path = ensure_qwen_model()
     service_env = os.environ.copy()
-    service_env.update({"ZHIHUA_BACKEND": "local", "ZHIHUA_USE_KB": "0", "ZHIHUA_MODEL_PATH": str(model_path)})
+    service_env.update({
+        "ZHIHUA_BACKEND": "local",
+        "ZHIHUA_USE_KB": "0",
+        "ZHIHUA_MODEL_PATH": str(model_path),
+        "OCR_TEXT_RECOGNITION_MODEL_DIR": str(ocr_model_path),
+    })
 
     ensure_service("inscription_detector", DETECTOR_PORT, [str(VENV_PYTHON), str(ROOT / "mcp_services" / "inscription_detector" / "server.py")], ROOT, 120, service_env)
     ensure_service("ocr", OCR_PORT, [str(VENV_PYTHON), str(ROOT / "mcp_services" / "ocr" / "server.py")], ROOT, 120, service_env)
