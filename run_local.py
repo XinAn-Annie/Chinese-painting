@@ -302,11 +302,9 @@ def ensure_qwen_model() -> Path:
             print(f"[复用] Qwen 模型：{target}")
             return target
     else:
-        legacy_model = ROOT.parents[1] / "知画知识库" / "Qwen2.5-VL-3B-Instruct"
-        for candidate in (MODEL_DIR, legacy_model):
-            if model_is_complete(candidate):
-                print(f"[复用] Qwen 模型：{candidate}")
-                return candidate
+        if model_is_complete(MODEL_DIR):
+            print(f"[复用] Qwen 模型：{MODEL_DIR}")
+            return MODEL_DIR
         target = MODEL_DIR
 
     free_gb = shutil.disk_usage(target.parent if target.parent.exists() else ROOT).free / (1024 ** 3)
