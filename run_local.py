@@ -276,6 +276,7 @@ def ensure_ocr_model(
         archive.extractall(staging)
     if not ocr_model_is_complete(staging):
         raise RuntimeError(f"{label}解压后完整性检查失败。")
+    target.parent.mkdir(parents=True, exist_ok=True)
     shutil.rmtree(target, ignore_errors=True)
     staging.replace(target)
     download.unlink(missing_ok=True)
