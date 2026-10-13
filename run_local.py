@@ -408,6 +408,12 @@ def main() -> int:
     )
     model_path = ensure_qwen_model()
     service_env = os.environ.copy()
+    # Paddle/Qwen services import Torch on Windows.  Put the venv's native
+    # libraries first so a host application's unrelated DLLs cannot shadow
+    # torch's bundled dependencies (notably shm.dll/libiomp5md.dll).
+    torch_lib = VENV_DIR / "Lib" / "site-packages" / "torch" / "lib"
+    if torch_lib.is_dir():
+        service_env["PATH"] = str(torch_lib) + os.pathsep + service_env.get("PATH", "")
     service_env.update({
         "ZHIHUA_BACKEND": "local",
         "ZHIHUA_USE_KB": "0",
