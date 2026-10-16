@@ -1,27 +1,20 @@
-# MCP Services
+# Local services
 
-这里保存画基因项目中的实验性 MCP 服务和本地模型网关：
+普通用户不需要单独启动本目录下的服务。项目根目录的 `run_local.py` 会启动 `local_gateway.py`，将三个 Flask 应用挂载到同一个进程和 `127.0.0.1:8000`。
 
-- `color_extractor/`：读取图片 URL，使用 OpenCV 与 K-means 提取主要颜色。
-- `color_namer/`：根据颜色距离匹配传统色数据库。
-- `html_generator/`：把颜色信息写入交互式 HTML 模板。
-- `ocr/`：PaddleOCR 题跋识别适配器，输出文字框、置信度和横竖排方向，供词云和原图高亮使用。
-- `zhihua/`：默认加载本地 Qwen2.5-VL-3B-Instruct，并检索 `ZhiHua_QA` 知识库生成国画赏析；也可切换到远程 OpenAI 兼容端点。
+- `inscription_detector/`：定位题跋区域，不识别文字内容。
+- `ocr/`：使用 PaddleOCR 识别题跋区域，输出文字、坐标和置信度。
+- `zhihua/`：使用本地 Qwen2.5-VL-3B-Instruct 生成赏析和五类技法相对倾向，并执行术语和传统色约束。
+- `color_namer/color_database.json`：为后处理提供受控传统色名称；它不是独立 HTTP 服务。
 
-颜色分析和印章热力图不依赖本地服务；题跋识别和知画赏析需要本地服务。普通用户双击项目根目录的 `启动画基因_Google.bat` 或 `启动画基因_Edge.bat`，即可自动安装依赖、下载 Qwen 模型并统一启动所需服务。
+路由：
 
-不要把虚拟环境、密钥或本地 IDE 配置上传到公开仓库。
+```text
+/services/inscription-detector/api/...
+/services/ocr/api/...
+/services/zhihua/api/...
+```
 
-## 依赖
+颜色提取、传统色距离匹配和印章启发式分析已改为浏览器端执行，不再使用历史的 8002/8003 服务。
 
-一键启动所需依赖统一记录在项目根目录的 `requirements-local.txt`，首次运行时安装到项目自己的 `.venv`，不会写入仓库。
-
-## 启动提示
-
-- `color_extractor/color_extractor.py` 当前使用 STDIO 传输启动。
-- `color_namer/color_namer.py` 当前使用 HTTP 传输并监听 8002 端口，启动时会从同目录读取 `color_database.xlsx`。
-- `html_generator/html_generator.py` 当前使用 SSE 传输并监听 8003 端口；启动时需要把工作目录设为 `html_generator/`，这样相对路径 `templates/color_visualization.html` 才能找到模板。
-- `inscription_detector/server.py` 监听 8005 端口。
-- `ocr/server.py` 监听 8004 端口。
-- `zhihua/server.py` 监听 8006 端口；首次推理会把模型权重载入显存和内存，需要等待。
-- 根目录的 `run_local.py` 负责下载、校验、启动和退出清理。
+依赖统一记录在项目根目录 `requirements-local.txt`。不要提交 `.venv`、`.models`、`.offload`、日志、密钥或本地 IDE 配置。

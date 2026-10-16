@@ -1,6 +1,6 @@
 # 本地国画赏析与知识讲解服务
 
-该服务默认在本机加载 `Qwen2.5-VL-3B-Instruct`，直接根据上传画面生成审慎分析，不把知识库问答内容交给模型。模型回答完成后，服务只使用受控术语表做确定性的术语规范化；颜色描述则严格受上方颜色识别结果约束。网页只把图片发送到本机 `127.0.0.1:8006`，不需要 API Key。本项目和随项目提供的 Qwen 备用权重仅用于非商业研究、学习与评估。
+该服务默认在本机加载 `Qwen2.5-VL-3B-Instruct`，直接根据上传画面生成审慎分析，不把知识库问答内容交给模型。模型回答完成后，服务只使用受控术语表做确定性的术语规范化；颜色描述则严格受上方颜色识别结果约束。网页只把图片发送到本机 `127.0.0.1:8000`，不需要 API Key。本项目和随项目提供的 Qwen 备用权重仅用于非商业研究、学习与评估。
 
 ## 默认本机路径
 
@@ -14,14 +14,14 @@
 
 ## 启动
 
-普通用户直接双击项目根目录的 `启动画基因_Google.bat` 或 `启动画基因_Edge.bat`。首次运行会创建虚拟环境、安装依赖，并优先从 ModelScope 自动下载模型；如果 ModelScope 失败，下载器会自动切换到 GitHub Release 分卷，支持续传、逐卷 SHA256 校验、合并和整文件复核。若只调试知画服务，可在首次安装完成后运行：
+普通用户直接双击项目根目录的 `启动画基因.bat`。首次运行会创建虚拟环境、安装依赖，并优先从 ModelScope 自动下载模型；如果 ModelScope 失败，下载器会自动切换到 GitHub Release 分卷，支持续传、逐卷 SHA256 校验、合并和整文件复核。若只调试知画服务，可在首次安装完成后运行：
 
 ```powershell
 cd .\mcp_services\zhihua
 .\start_local.ps1
 ```
 
-服务启动后访问 `http://127.0.0.1:8006/api/health`。正常状态应显示：
+服务启动后访问 `http://127.0.0.1:8000/services/zhihua/api/health`。正常状态应显示：
 
 - `backend: local`
 - `knowledge_enabled: false`
@@ -37,7 +37,9 @@ cd .\mcp_services\zhihua
 
 可通过环境变量调整：
 
-- `ZHIHUA_MAX_TOKENS`：回答最大新 token 数，默认 700。
+- `ZHIHUA_MAX_TOKENS`：首次分析最大新 token 数，默认 512。
+- `ZHIHUA_FOLLOWUP_MAX_TOKENS`：追加提问最大新 token 数，默认 512。
+- `ZHIHUA_CONTINUATION_MAX_TOKENS`：检测到截断或残句时自动续写的最大新 token 数，默认 192。
 - `ZHIHUA_USE_KB=1`：重新启用 `ZhiHua_QA` 检索；默认关闭。
 - `ZHIHUA_RAG_TOP_K`：检索知识条数，默认 3。
 - `ZHIHUA_MODEL_PATH`：覆盖本地模型目录。

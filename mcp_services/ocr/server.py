@@ -15,6 +15,7 @@ from paddle_ocr_adapter import (
     DEFAULT_TEXT_DETECTION_MODEL_DIR,
     DEFAULT_TEXT_RECOGNITION_MODEL,
     DEFAULT_TEXT_RECOGNITION_MODEL_DIR,
+    DEFAULT_FALLBACK_RECOGNITION_MODEL_DIR,
     DEFAULT_TEXTLINE_ORIENTATION_MODEL,
     DEFAULT_TEXTLINE_ORIENTATION_MODEL_DIR,
 )
@@ -38,8 +39,20 @@ def health():
             str(ocr.text_recognition_model_dir) if ocr is not None
             else os.getenv(
                 "OCR_TEXT_RECOGNITION_MODEL_DIR",
-                str(DEFAULT_TEXT_RECOGNITION_MODEL_DIR),
+                "",
             )
+        ),
+        "fallback_recognition_model_dir": (
+            str(ocr.fallback_recognition_model_dir) if ocr is not None
+            else os.getenv(
+                "OCR_FALLBACK_RECOGNITION_MODEL_DIR",
+                str(DEFAULT_FALLBACK_RECOGNITION_MODEL_DIR),
+            )
+        ),
+        "min_confidence": ocr.min_confidence if ocr is not None else float(os.getenv("OCR_MIN_CONFIDENCE", "0.30")),
+        "fallback_trigger_confidence": (
+            ocr.fallback_trigger_confidence if ocr is not None
+            else float(os.getenv("OCR_FALLBACK_TRIGGER_CONFIDENCE", "0.60"))
         ),
         "text_detection_model": (
             ocr.text_detection_model_name if ocr is not None
@@ -77,8 +90,11 @@ def recognize():
                     "OCR_TEXT_RECOGNITION_MODEL", DEFAULT_TEXT_RECOGNITION_MODEL
                 ),
                 text_recognition_model_dir=os.getenv(
-                    "OCR_TEXT_RECOGNITION_MODEL_DIR",
-                    str(DEFAULT_TEXT_RECOGNITION_MODEL_DIR),
+                    "OCR_TEXT_RECOGNITION_MODEL_DIR", ""
+                ) or DEFAULT_TEXT_RECOGNITION_MODEL_DIR,
+                fallback_recognition_model_dir=os.getenv(
+                    "OCR_FALLBACK_RECOGNITION_MODEL_DIR",
+                    str(DEFAULT_FALLBACK_RECOGNITION_MODEL_DIR),
                 ),
                 text_detection_model_name=os.getenv(
                     "OCR_TEXT_DETECTION_MODEL", DEFAULT_TEXT_DETECTION_MODEL
@@ -92,7 +108,10 @@ def recognize():
                 textline_orientation_model_dir=os.getenv(
                     "OCR_TEXTLINE_ORIENTATION_MODEL_DIR", str(DEFAULT_TEXTLINE_ORIENTATION_MODEL_DIR)
                 ),
-                min_confidence=float(os.getenv("OCR_MIN_CONFIDENCE", "0.60")),
+                min_confidence=float(os.getenv("OCR_MIN_CONFIDENCE", "0.30")),
+                fallback_trigger_confidence=float(
+                    os.getenv("OCR_FALLBACK_TRIGGER_CONFIDENCE", "0.60")
+                ),
             )
         return jsonify({"items": ocr.recognize(temp_path)})
     except Exception as exc:
@@ -102,4 +121,4 @@ def recognize():
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=8004, debug=False)
+    app.run(host="127.0.0.1", port=8000, debug=False)

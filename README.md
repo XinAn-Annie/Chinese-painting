@@ -1,106 +1,101 @@
-# ArtGenome / 画基因：古画色彩分析交互原型
+# ArtGenome / 画基因
 
-> **非商业项目声明：** 本项目仅用于非商业研究、学习与评估，不用于商业服务。知画功能使用的 Qwen 模型遵循随模型分发的 `Qwen RESEARCH LICENSE AGREEMENT`。
+画基因是一个面向中国古画学习与视觉分析的本地交互平台。用户上传图片后，页面会执行颜色分析、题跋区域检测与 OCR、印章候选分析，并使用本地 `Qwen2.5-VL-3B-Instruct` 生成赏析和五类技法相对倾向。
 
-这是一个面向古画学习与传统色彩研究的交互式原型，探索从图片中提取主要颜色、匹配传统色名称，并通过三维颜色空间帮助用户理解色彩关系。
+> 本项目仅授权用于非商业学习、研究和评估。项目代码见 [LICENSE](LICENSE)；Qwen、HCSU、字体和其他依赖各自适用原始许可，见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-## 已实现的网页功能
+## 已实现功能
 
-- 图片上传与预览
-- 基于 Canvas 的图片采样与主要颜色提取
-- K-means 色彩聚类
-- 传统色数据库匹配
-- 中文色名、拼音、英文名、HEX 与 RGB 信息展示
-- Plotly 三维颜色空间可视化
-- 本地题跋区域检测、PaddleOCR、原图文字框和词云
-- 三级印章候选检测、原图分阶段标注和 `24 × 16` 概率矩阵
-- Qwen 生成的白描、工笔、写意、泼墨、没骨五类技法倾向雷达图与相对占比
-- 本地国画赏析入口：使用 `Qwen2.5-VL-3B-Instruct` 直接读取画面，默认不连接知识库；模型回答后仅根据其已描述的可见证据补充受控专业术语，颜色名称则只能来自本幅画上方颜色识别结果，并统一写成“推测为XX色”
+- 图片上传、预览和原图定位。
+- Canvas 主色提取、K-means 聚类、传统色匹配和 Plotly 三维色彩空间。
+- 本地题跋区域检测、PaddleOCR、置信度、原图文字框和词云。
+- 印章候选标注、位置矩阵和 PNG/JSON 导出。
+- 本地 Qwen 赏析与白描、工笔、写意、泼墨、没骨五类技法相对倾向。
+- 同一幅画追问时复用已有画面分析、OCR、颜色和技法结果，不重新识图。
+- 专业术语库依据可见证据进行约束；只有问题涉及颜色时才传递当前图片的传统色结果。
 
-## 快速运行
+## Windows 一键运行
 
-Windows 用户下载并解压仓库后，可以按所需浏览器选择启动文件：
+### 环境要求
 
-- `启动画基因_Google.bat`：使用 Windows 当前的默认浏览器；若希望由 Chrome 打开，请先将 Chrome 设为默认浏览器；
-- `启动画基因_Edge.bat`：明确使用 Microsoft Edge，未安装 Edge 时自动回退到默认浏览器；
-- `启动画基因_加速版.bat`：自动实测多个 PyPI 软件源并选用当前网络下响应最快的可用源，同时提高 ModelScope 大文件下载的并行数。
+- Windows 10/11 64 位。
+- Windows PowerShell 5.1 或更高版本；**不要求用户预装 Python**。
+- 首次运行需联网，建议预留 20 GB 空间。
+- 可选 NVIDIA GPU；8 GB 显存使用 4-bit Qwen。无 NVIDIA GPU 时回退到 CPU，生成速度会明显降低。
 
-### 新用户首次使用
+### 推荐的手动准备（可选）
 
-1. 从 GitHub 的 **Code → Download ZIP** 下载并解压本仓库；不要复制其他电脑的 `.venv` 或 `.models` 文件夹。
-2. 安装 **64 位 Python 3.12**，安装时勾选 **Add Python to PATH**。随后在命令提示符运行 `python --version`，应显示 `3.12.x`。
-3. 保持联网并预留至少 **20 GB** 可用空间；推荐双击 `启动画基因_加速版.bat`。它会实测 wheel 下载速度后选择当前较快的软件源。
-4. 首次启动会依次安装 Python 依赖、下载三套 OCR 权重、下载 Qwen 模型，并启动网页和三个本地服务。请保持启动窗口开启，直到浏览器自动打开 `http://127.0.0.1:8000/web_demo/index.html`。
-5. 上传图片后可直接进行颜色分析、印章分析和题跋识别。完成颜色分析后，才可使用“请知画赏析”。第一次赏析会加载 Qwen 权重，CPU 设备可能需要较长时间。
+启动器可以自动配置运行环境，但为了减少首次配置失败并便于排查问题，建议用户提前从 [Python 官网 Windows 下载页](https://www.python.org/downloads/windows/) 下载并安装 **64 位 Python 3.12.x**。
 
-Qwen 默认从 ModelScope 下载；若该下载失败，启动器会自动切换到 GitHub Release 分卷并断点续传、校验、合并。项目仅用于非商业研究、学习与评估；Qwen 备用权重附带其原始许可证和 NOTICE。
+使用 NVIDIA 显卡的用户，建议安装与显卡驱动兼容的 **CUDA 版 PyTorch**。最简单且不会装错环境的方法是先双击 `启动画基因.bat` 完成基础环境，再双击 `安装NVIDIA加速.bat`；脚本会把 CUDA 版 PyTorch 和 GPU 版 PaddlePaddle 安装进本项目的 `.venv`。如果自行下载 PyTorch `.whl`，也必须用 `.venv\Scripts\python.exe -m pip install <wheel文件>` 安装，只有把文件下载到电脑并不会启用 GPU。具体 CUDA 版本选择以 [PyTorch 官方安装页](https://pytorch.org/get-started/locally/) 为准。
 
-首次运行会自动：
+没有 NVIDIA 显卡的用户不需要下载 CUDA 版 PyTorch，可以直接使用 CPU 模式。
 
-1. 在项目内创建隔离的 `.venv`；
-2. 安装题跋检测器、PaddleOCR 和知画服务所需依赖；
-3. 优先从 ModelScope 下载约 7.5 GB 的 `Qwen2.5-VL-3B-Instruct`；ModelScope 失败时自动切换到 GitHub Release 分卷，两种方式均支持中断后再次运行；
-4. 启动题跋检测器（8005）、PaddleOCR（8004）、知画（8006）和本地网页（8000）；
-5. 服务全部就绪后自动打开浏览器。
+### 启动
 
-电脑需要预先安装 **64 位 Python 3.12**，首次运行需要联网，并建议至少预留 15–20 GB 磁盘空间。模型、虚拟环境和运行日志都保存在本机，不会上传到 GitHub。请保持启动窗口开启；关闭窗口或按 `Ctrl+D` 会停止本次启动的服务。
+1. 选择 GitHub **Code → Download ZIP** 并完整解压；不要从其他电脑复制 `.venv` 或 `.models`。
+2. 双击 `启动画基因.bat`。
+3. 首次启动会在项目内下载 `uv` 和专用的 64 位 Python 3.12，随后创建 `.venv`、安装依赖、下载并校验 OCR/Qwen 模型，全部完成后才启动本地网页。
+4. 保持启动窗口开启。页面地址为 `http://127.0.0.1:8000/web_demo/index.html`。
+5. 按 `Ctrl+D` 停止本次服务。
 
-### 加速版说明
+可用启动器：
 
-首次安装 PaddlePaddle、PyTorch、PaddleOCR 等较大组件，或下载约 7.5 GB 的 Qwen 模型较慢时，可以直接双击 `启动画基因_加速版.bat`。该启动器会：
+- `启动画基因.bat`：使用系统默认浏览器。
+- `修复安装.bat`：保留已下载模型，重新检查 Python 依赖。
+- `安装NVIDIA加速.bat`：显式安装 CUDA 版 PyTorch 和 GPU 版 PaddlePaddle。普通启动不自动下载数 GB 的 CUDA 组件。
 
-- 分别测试 PyPI 官方源、阿里云和清华大学镜像，自动选择当前可用且响应最快的源；
-- 为 ModelScope 大文件下载启用 4 路并行，并设置合理的超时与重试次数；
-- 如果全部测速请求均失败，直接回退到官方 PyPI，不会把整套启动流程重复执行一遍；
-- 继续复用项目原有的 `.venv`、模型缓存、断点续传和服务启动流程。
+用户电脑原有的 Python 可以是其他版本，也可以完全没有 Python。启动器只使用项目目录中的 `.bootstrap/` 和 `.venv/`，不会修改系统 Python、系统 `PATH` 或其他项目环境；后续启动会直接复用。若 `.venv` 不是可用的 64 位 Python 3.12，启动器会自动重建该虚拟环境。
 
-加速版不会减少模型本身的文件大小，实际速度仍取决于本机网络、镜像同步状态和磁盘写入速度。已经完成首次安装的电脑会直接复用本地依赖和模型，不会重复下载。
+已删除功能重复的 Google、Edge 和“加速版”启动脚本；浏览器选择统一交给系统默认设置，下载复用、校验和断点续传仍由 `run_local.py` 管理。
 
-### 浏览器兼容说明
+## 本地模型
 
-- 网页兼容当前版本的 Microsoft Edge 和 Google Chrome，两者均为 Chromium 内核浏览器。
-- 已在 Microsoft Edge 155 中验证网页加载，以及题跋检测器、PaddleOCR、知画三个本地服务的健康检查请求。
-- 请通过启动器打开 `http://127.0.0.1:8000/web_demo/index.html`，不要直接双击 `web_demo/index.html`。使用本地网页地址能避免不同浏览器对 `file://` 页面权限处理不一致。
-- 如果默认浏览器是 Chrome，但希望使用 Edge，请双击 `启动画基因_Edge.bat`。
+- Qwen 默认从 ModelScope 下载；失败后自动切换到 GitHub Release 分卷，逐卷校验 SHA256 后合并。
+- OCR 启动器会下载文字检测、文字方向和 HCSU 低置信度单字备用模型。
+- 官方 `PP-OCRv5_server_rec` 负责完整题跋和多字文本行；HCSU 不作为唯一识别模型。
+- 模型保存在 `.models/`，Python 引导文件保存在 `.bootstrap/`，本机环境保存在 `.venv/`；三者都不提交到 Git。
+- 项目不调用远程推理 API；上传图片只发送到本机 `127.0.0.1:8000`。
 
-### Python 版本兼容说明
+已完成首次安装后，后续启动会复用依赖和模型。首次 OCR 或 Qwen 请求仍需要将模型加载到内存/显存，因此比后续请求慢。
 
-- **仅支持 64 位 Python 3.12**；本项目已在 Python 3.12.8 上验证。启动器会明确优先调用 `py -3.12`，避免误用本机的其他 Python 版本。
-- 如果仍无法启动，请在命令提示符中运行 `py -3.12 --version` 和 `python --version`。前者应显示 `Python 3.12.x`；否则请重新安装 64 位 Python 3.12，并在安装界面勾选 **Add Python to PATH**。
-- 不要把其他电脑复制来的 `.venv` 一并使用。虚拟环境包含本机路径和平台相关组件，应删除旧 `.venv` 后由启动批处理在当前电脑上重新创建。
+## 服务架构
 
-后续运行会复用已经安装的依赖和模型，不会重复下载。网页还依赖 CDN 中的 Plotly、Three.js 和 Google Fonts；如果需要完整显示 3D 图和字体，请保持网络连接。首次题跋识别加载 PaddleOCR、首次知画赏析加载 Qwen 时都可能需要几十秒或更久。
+`run_local.py` 只启动一个 `local_gateway.py` 进程和一个对外端口 `8000`：
 
-## 目录说明
-
-- `web_demo/`：可直接运行的静态网页
-- `mcp_services/color_extractor/`：图片主色提取 MCP 服务
-- `mcp_services/color_namer/`：传统色匹配 MCP 服务和数据库
-- `mcp_services/html_generator/`：交互式 HTML 生成 MCP 服务
-- `experiments/`：题款词云、印章热图、报告页面实验
-- `mcp_services/inscription_detector/`：题跋区域检测服务与本地模型
-- `mcp_services/ocr/`：PaddleOCR 题跋识别适配器，输出文字、坐标和置信度
-- `mcp_services/zhihua/`：本地 Qwen2.5-VL、受控术语规范化与可选的 ZhiHua_QA 检索服务，也保留远程兼容模式
-- `data/`：传统色数据
-
-## 题跋 OCR 试运行
-
-一键启动后，网页会先调用 `8005` 端口的本地模型定位题跋区域，再把检测到的区域交给 `8004` 端口的 PaddleOCR。图片不会提交到外部接口。首次启动会从 GitHub Release 下载并校验书法微调识别、文字检测和文字方向三套 OCR 权重；完成后第一次识别不会再临时下载这三套模型。
-
-如需单独调试 OCR，可在安装 `mcp_services/ocr/requirements.txt` 后运行：
-
-```bash
-python mcp_services/ocr/paddle_ocr_adapter.py path/to/painting.jpg -o ocr_result.json
+```text
+127.0.0.1:8000
+├─ /web_demo/                         网页与本地静态资源
+├─ /services/inscription-detector/   题跋区域检测
+├─ /services/ocr/                    PaddleOCR
+└─ /services/zhihua/                 本地 Qwen 赏析
 ```
 
-默认使用 `PP-OCRv5_server_rec` 文字识别模型，兼顾简体、繁体、手写、竖排和生僻字等场景。识别结果中的低置信度文字应人工复核；草书、篆书、残缺题字和印章文字不能视为已经可靠识别。
+颜色提取、传统色匹配和印章启发式分析在浏览器内执行，不再依赖 8002/8003/8004/8005/8006 等独立端口。
 
-## 项目边界
+## 目录
 
-网页端是交互原型。颜色分析和印章热图可直接在浏览器运行；题跋 OCR 和国画赏析分别需要本地服务。国画赏析默认使用本机模型，不需要远程推理端点或 API Key。项目不把模型生成内容描述为鉴定结论。
+- `web_demo/`：前端页面、本地 Plotly、字体和示例资源。
+- `mcp_services/inscription_detector/`：题跋区域检测服务和项目模型。
+- `mcp_services/ocr/`：PaddleOCR 适配器与 HTTP 路由。
+- `mcp_services/zhihua/`：Qwen 本地推理、分析缓存、术语约束与可选检索。
+- `mcp_services/color_namer/color_database.json`：后端允许的传统色名称集。
+- `evaluation/`：OCR 评估脚本，不参与普通用户运行。
+- `experiments/`：历史实验脚本，不参与普通用户运行。
 
-印章原图叠加层只显示第二、第三阶段候选：第二阶段使用蓝色虚线框，第三阶段使用蓝色实线框，第一阶段不显示。概率矩阵仍综合全部候选的启发式证据分；该分数不是统计概率或识别准确率。
+## 局限
 
-## 贡献说明
+- OCR 对草书、篆书、残损题字和印文仍可能误识，低置信度结果必须人工核对。
+- 印章矩阵数值是启发式证据分，不是概率或识别准确率。
+- 技法数值是模型对当前画面特征的相对倾向，不是作者、年代、技法或真伪鉴定。
+- Qwen 输出只供学习参考，不用于价格评估或真伪鉴定。
 
-本项目的界面、交互流程和网页原型由作者独立完成。后续公开版本会继续补充运行说明、截图和实验边界。
+## 开发者调试
+
+依赖统一由 `requirements-local.txt` 和 `run_local.py` 管理。单独调试 OCR：
+
+```powershell
+& '.\.venv\Scripts\python.exe' .\mcp_services\ocr\paddle_ocr_adapter.py path\to\painting.jpg -o ocr_result.json
+```
+
+对外发布前，应在全新 Windows 环境中验证 ZIP 解压、依赖安装、模型下载、单端口启动和真实 OCR/Qwen 推理。

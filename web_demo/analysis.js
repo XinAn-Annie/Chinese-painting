@@ -1,0 +1,1312 @@
+        const techniqueRadar = document.getElementById('techniqueRadar');
+        const techniqueBars = document.getElementById('techniqueBars');
+        const techniqueStatus = document.getElementById('techniqueStatus');
+        const techniqueLabels = ['白描', '工笔', '写意', '泼墨', '没骨'];
+        let currentTechniqueData = null;
+
+        function drawTechniqueRadar(scores = null) {
+            const ctx = techniqueRadar.getContext('2d');
+            const width = techniqueRadar.width;
+            const height = techniqueRadar.height;
+            const centerX = width / 2;
+            const centerY = height / 2 + 8;
+            const radius = Math.min(width, height) * 0.31;
+            const point = (index, ratio = 1) => {
+                const angle = -Math.PI / 2 + index * Math.PI * 2 / techniqueLabels.length;
+                return [centerX + Math.cos(angle) * radius * ratio, centerY + Math.sin(angle) * radius * ratio];
+            };
+            const polygon = (ratio) => {
+                ctx.beginPath();
+                techniqueLabels.forEach((_, index) => {
+                    const [x, y] = point(index, ratio);
+                    if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                });
+                ctx.closePath();
+            };
+
+            ctx.clearRect(0, 0, width, height);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, width, height);
+            ctx.lineWidth = 1;
+            for (let ring = 1; ring <= 5; ring++) {
+                polygon(ring / 5);
+                ctx.strokeStyle = ring === 5 ? '#a9a8a1' : '#d9d8d2';
+                ctx.stroke();
+            }
+            techniqueLabels.forEach((label, index) => {
+                const [x, y] = point(index);
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(x, y);
+                ctx.strokeStyle = '#d0cfc9';
+                ctx.stroke();
+                const [labelX, labelY] = point(index, 1.18);
+                ctx.fillStyle = '#343430';
+                ctx.font = '700 25px "Microsoft YaHei", sans-serif';
+                ctx.textAlign = labelX < centerX - 8 ? 'right' : labelX > centerX + 8 ? 'left' : 'center';
+                ctx.textBaseline = labelY < centerY ? 'bottom' : 'top';
+                ctx.fillText(label, labelX, labelY);
+            });
+
+            if (scores) {
+                ctx.beginPath();
+                techniqueLabels.forEach((label, index) => {
+                    const ratio = Math.max(0, Math.min(100, Number(scores[label]) || 0)) / 100;
+                    const [x, y] = point(index, ratio);
+                    if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                });
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(92,61,46,.22)';
+                ctx.strokeStyle = '#5c3d2e';
+                ctx.lineWidth = 4;
+                ctx.fill();
+                ctx.stroke();
+                techniqueLabels.forEach((label, index) => {
+                    const ratio = Math.max(0, Math.min(100, Number(scores[label]) || 0)) / 100;
+                    const [x, y] = point(index, ratio);
+                    ctx.beginPath();
+                    ctx.arc(x, y, 6, 0, Math.PI * 2);
+                    ctx.fillStyle = '#5c3d2e';
+                    ctx.fill();
+                });
+            }
+        }
+
+        function renderTechniqueAnalysis(techniques = null, message = '') {
+            const scores = techniques?.available ? techniques.scores : null;
+            currentTechniqueData = scores ? techniques : null;
+            drawTechniqueRadar(scores);
+            techniqueBars.replaceChildren();
+            document.getElementById('techniqueEvidence')?.remove();
+            const evidenceList = document.createElement('div');
+            evidenceList.id = 'techniqueEvidence';
+            evidenceList.className = 'analysis-note';
+            techniqueLabels.forEach(label => {
+                const value = scores ? Math.max(0, Math.min(100, Number(scores[label]) || 0)) : null;
+                const row = document.createElement('div');
+                row.className = 'technique-row';
+                const name = document.createElement('span');
+                name.className = 'technique-name';
+                name.textContent = label;
+                const track = document.createElement('span');
+                track.className = 'technique-track';
+                const fill = document.createElement('i');
+                fill.className = 'technique-fill';
+                fill.style.width = value === null ? '0%' : `${value}%`;
+                track.appendChild(fill);
+                const number = document.createElement('span');
+                number.className = 'technique-value';
+                number.textContent = value === null ? '— /100' : `${Number(value.toFixed(1))} /100`;
+                row.append(name, track, number);
+                const evidenceText = techniques?.evidence?.[label];
+                if (evidenceText) {
+                    const evidence = document.createElement('small');
+                    evidence.className = 'technique-evidence';
+                    evidence.textContent = `${label}：${evidenceText}`;
+                    evidenceList.appendChild(evidence);
+                }
+                techniqueBars.appendChild(row);
+            });
+            if (evidenceList.childElementCount) techniqueBars.after(evidenceList);
+            techniqueRadar.setAttribute('aria-label', scores
+                ? `五类技法倾向雷达图：${techniqueLabels.map(label => `${label}${scores[label]}分`).join('，')}`
+                : '五类技法倾向雷达图，等待分析');
+            techniqueStatus.textContent = message || (scores
+                ? (techniques.meaning || '五项为模型相对倾向，总计 100%；不是识别概率或学术鉴定。')
+                : '上传图片后自动生成技法五角图和占比。数值表示模型的相对视觉倾向，不是识别概率或学术鉴定。');
+        }
+
+        renderTechniqueAnalysis();
+
+
+// 中国传统色彩数据库 (示例数据，您可以替换为完整数据库)
+        const colorDatabase = [
+    { 中文名: "朱砂", 拼音: "zhū shā", 英文译名: "Cinnabar Red", HEX: "#E34234", RGB: [227, 66, 52], 来源: "矿物", 色系: "红色系" },
+    { 中文名: "胭脂红", 拼音: "yān zhī hóng", 英文译名: "Rouge Red", HEX: "#D95030", RGB: [217, 80, 48], 来源: "植物", 色系: "红色系" },
+    { 中文名: "妃色", 拼音: "fēi sè", 英文译名: "Consort Pink", HEX: "#ED5736", RGB: [237, 87, 54], 来源: "植物", 色系: "红色系" },
+    { 中文名: "大红", 拼音: "dà hóng", 英文译名: "Grand Red", HEX: "#C83C23", RGB: [200, 60, 35], 来源: "矿物", 色系: "红色系" },
+    { 中文名: "绛紫", 拼音: "jiàng zǐ", 英文译名: "Dark Purple Red", HEX: "#922B21", RGB: [146, 43, 33], 来源: "矿物", 色系: "红色系" },
+    { 中文名: "珊瑚红", 拼音: "shān hú hóng", 英文译名: "Coral Red", HEX: "#FF6B61", RGB: [255, 107, 97], 来源: "植物", 色系: "红色系" },
+    { 中文名: "丹", 拼音: "dān", 英文译名: "Cinnabar", HEX: "#E84A4A", RGB: [232, 74, 74], 来源: "矿物", 色系: "红色系" },
+    { 中文名: "赭石", 拼音: "zhě shí", 英文译名: "Ochre", HEX: "#A0522D", RGB: [160, 82, 45], 来源: "矿物", 色系: "红色系" },
+    { 中文名: "朱膘", 拼音: "zhū biāo", 英文译名: "Red Orange", HEX: "#F36838", RGB: [243, 104, 56], 来源: "矿物", 色系: "红色系" },
+    { 中文名: "绯红", 拼音: "fēi hóng", 英文译名: "Scarlet", HEX: "#F53B3B", RGB: [245, 59, 59], 来源: "植物", 色系: "红色系" },
+    { 中文名: "橙黄", 拼音: "chéng huáng", 英文译名: "Orange Yellow", HEX: "#F2994A", RGB: [242, 153, 74], 来源: "矿物", 色系: "橙色系" },
+    { 中文名: "杏黄", 拼音: "xìng huáng", 英文译名: "Apricot Yellow", HEX: "#F7BE79", RGB: [247, 190, 121], 来源: "植物", 色系: "橙色系" },
+    { 中文名: "橘黄", 拼音: "jú huáng", 英文译名: "Tangerine Yellow", HEX: "#F5A623", RGB: [245, 166, 35], 来源: "植物", 色系: "橙色系" },
+    { 中文名: "橙红", 拼音: "chéng hóng", 英文译名: "Orange Red", HEX: "#FF5A36", RGB: [255, 90, 54], 来源: "矿物", 色系: "橙色系" },
+    { 中文名: "赤橙", 拼音: "chì chéng", 英文译名: "Vermilion Orange", HEX: "#FF4D00", RGB: [255, 77, 0], 来源: "矿物", 色系: "橙色系" },
+    { 中文名: "橙皮", 拼音: "chéng pí", 英文译名: "Orange Peel", HEX: "#FFA347", RGB: [255, 163, 71], 来源: "植物", 色系: "橙色系" },
+    { 中文名: "橘红", 拼音: "jú hóng", 英文译名: "Tangerine Red", HEX: "#FF784F", RGB: [255, 120, 79], 来源: "植物", 色系: "橙色系" },
+    { 中文名: "灯笼红", 拼音: "dēng lóng hóng", 英文译名: "Lantern Red", HEX: "#F14336", RGB: [241, 67, 54], 来源: "矿物", 色系: "橙色系" },
+    { 中文名: "柿红", 拼音: "shì hóng", 英文译名: "Persimmon Red", HEX: "#F35936", RGB: [243, 89, 54], 来源: "植物", 色系: "橙色系" },
+    { 中文名: "朱红", 拼音: "zhū hóng", 英文译名: "Vermilion Red", HEX: "#F04E23", RGB: [240, 78, 35], 来源: "矿物", 色系: "橙色系" },
+    { 中文名: "鹅黄", 拼音: "é huáng", 英文译名: "Goose Yellow", HEX: "#FFFACD", RGB: [255, 250, 205], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "米黄", 拼音: "mǐ huáng", 英文译名: "Rice Yellow", HEX: "#F9E79F", RGB: [249, 231, 159], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "淡黄", 拼音: "dàn huáng", 英文译名: "Pale Yellow", HEX: "#FFF9E3", RGB: [255, 249, 227], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "柠檬黄", 拼音: "níng méng huáng", 英文译名: "Lemon Yellow", HEX: "#FFF44F", RGB: [255, 244, 79], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "秋香色", 拼音: "qiū xiāng sè", 英文译名: "Autumn Fragrance", HEX: "#D4B45F", RGB: [212, 180, 95], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "姜黄", 拼音: "jiāng huáng", 英文译名: "Turmeric Yellow", HEX: "#E4B169", RGB: [228, 177, 105], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "橙黄", 拼音: "chéng huáng", 英文译名: "Orange Yellow", HEX: "#FFB84D", RGB: [255, 184, 77], 来源: "矿物", 色系: "黄色系" },
+    { 中文名: "米汤色", 拼音: "mǐ tāng sè", 英文译名: "Rice Soup Color", HEX: "#F0E4D7", RGB: [240, 228, 215], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "象牙色", 拼音: "xiàng yá sè", 英文译名: "Ivory", HEX: "#F8F4E3", RGB: [248, 244, 227], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "芥黄", 拼音: "jiè huáng", 英文译名: "Mustard Yellow", HEX: "#D7B34E", RGB: [215, 179, 78], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "石绿", 拼音: "shí lǜ", 英文译名: "Malachite Green", HEX: "#43B29D", RGB: [67, 178, 157], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "艾绿", 拼音: "ài lǜ", 英文译名: "Wormwood Green", HEX: "#A8BBA5", RGB: [168, 187, 165], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "葱倩", 拼音: "cōng qiàn", 英文译名: "Onion Green", HEX: "#C1E4C3", RGB: [193, 228, 195], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "青黛", 拼音: "qīng dài", 英文译名: "Indigo Green", HEX: "#3D8273", RGB: [61, 130, 115], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "柳绿", 拼音: "liǔ lǜ", 英文译名: "Willow Green", HEX: "#9ACD32", RGB: [154, 205, 50], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "松花绿", 拼音: "sōng huā lǜ", 英文译名: "Pine Flower Green", HEX: "#7EB26D", RGB: [126, 178, 109], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "竹青", 拼音: "zhú qīng", 英文译名: "Bamboo Blue", HEX: "#4C8C6B", RGB: [76, 140, 107], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "碧绿", 拼音: "bì lǜ", 英文译名: "Jade Green", HEX: "#00A86B", RGB: [0, 168, 107], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "草绿", 拼音: "cǎo lǜ", 英文译名: "Grass Green", HEX: "#7CFC00", RGB: [124, 252, 0], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "苍绿", 拼音: "cāng lǜ", 英文译名: "Dark Green", HEX: "#32814B", RGB: [50, 129, 75], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "石青", 拼音: "shí qīng", 英文译名: "Azurite Blue", HEX: "#317EB9", RGB: [49, 126, 185], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "靛青", 拼音: "diàn qīng", 英文译名: "Indigo Blue", HEX: "#1661AB", RGB: [22, 97, 171], 来源: "植物", 色系: "蓝色系" },
+    { 中文名: "湖蓝", 拼音: "hú lán", 英文译名: "Lake Blue", HEX: "#30B4D9", RGB: [48, 180, 217], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "天青", 拼音: "tiān qīng", 英文译名: "Sky Blue", HEX: "#73C2FB", RGB: [115, 194, 251], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "宝蓝", 拼音: "bǎo lán", 英文译名: "Royal Blue", HEX: "#4169E1", RGB: [65, 105, 225], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "碧山", 拼音: "bì shān", 英文译名: "Blue Green Mountain", HEX: "#1F6F8B", RGB: [31, 111, 139], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "蔚蓝", 拼音: "wèi lán", 英文译名: "Cerulean Blue", HEX: "#007BA7", RGB: [0, 123, 167], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "远山蓝", 拼音: "yuǎn shān lán", 英文译名: "Distant Mountain Blue", HEX: "#506FAF", RGB: [80, 111, 175], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "靛蓝", 拼音: "diàn lán", 英文译名: "Indigo", HEX: "#4B0082", RGB: [75, 0, 130], 来源: "植物", 色系: "蓝色系" },
+    { 中文名: "宝石蓝", 拼音: "bǎo shí lán", 英文译名: "Sapphire Blue", HEX: "#0F52BA", RGB: [15, 82, 186], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "紫檀", 拼音: "zǐ tán", 英文译名: "Rosewood Purple", HEX: "#4D1A7F", RGB: [77, 26, 127], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "葡萄紫", 拼音: "pú táo zǐ", 英文译名: "Grape Purple", HEX: "#7D5284", RGB: [125, 82, 132], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "暮山紫", 拼音: "mù shān zǐ", 英文译名: "Twilight Purple", HEX: "#7D5886", RGB: [125, 88, 134], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "螺灰", 拼音: "luó huī", 英文译名: "Snail Gray", HEX: "#8A8C8E", RGB: [138, 140, 142], 来源: "矿物", 色系: "灰色系" },
+    { 中文名: "蟹壳灰", 拼音: "xiè ké huī", 英文译名: "Crab Shell Gray", HEX: "#5D655F", RGB: [93, 101, 95], 来源: "矿物", 色系: "灰色系" },
+    { 中文名: "瓦灰", 拼音: "wǎ huī", 英文译名: "Tile Gray", HEX: "#9D9D9D", RGB: [157, 157, 157], 来源: "人工", 色系: "灰色系" },
+    { 中文名: "墨黑", 拼音: "mò hēi", 英文译名: "Ink Black", HEX: "#0C0C0C", RGB: [12, 12, 12], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "煤精黑", 拼音: "méi jīng hēi", 英文译名: "Jet Black", HEX: "#2D2E2C", RGB: [45, 46, 44], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "鸦雏黑", 拼音: "yā chú hēi", 英文译名: "Crow Black", HEX: "#161823", RGB: [22, 24, 35], 来源: "人工", 色系: "黑色系" },
+    { 中文名: "银白", 拼音: "yín bái", 英文译名: "Silver White", HEX: "#E9F1F6", RGB: [233, 241, 246], 来源: "矿物", 色系: "白色系" },
+    { 中文名: "月白", 拼音: "yuè bái", 英文译名: "Moon White", HEX: "#D6E4F6", RGB: [214, 228, 246], 来源: "人工", 色系: "白色系" },
+    { 中文名: "象牙白", 拼音: "xiàng yá bái", 英文译名: "Ivory White", HEX: "#FFFCEB", RGB: [255, 252, 235], 来源: "人工", 色系: "白色系" },
+    { 中文名: "桃红", 拼音: "táo hóng", 英文译名: "Peach Pink", HEX: "#FFB6B9", RGB: [255, 182, 185], 来源: "植物", 色系: "红色系" },
+    { 中文名: "海棠红", 拼音: "hǎi táng hóng", 英文译名: "Crabapple Red", HEX: "#DB5A6B", RGB: [219, 90, 107], 来源: "植物", 色系: "红色系" },
+    { 中文名: "妃红", 拼音: "fēi hóng", 英文译名: "Fuchsia", HEX: "#ED5736", RGB: [237, 87, 54], 来源: "植物", 色系: "红色系" },
+    { 中文名: "品红", 拼音: "pǐn hóng", 英文译名: "Magenta", HEX: "#F00056", RGB: [240, 0, 86], 来源: "人工", 色系: "红色系" },
+    { 中文名: "梅红", 拼音: "méi hóng", 英文译名: "Plum Red", HEX: "#C04851", RGB: [192, 72, 81], 来源: "植物", 色系: "红色系" },
+    { 中文名: "檀红", 拼音: "tán hóng", 英文译名: "Sandalwood Red", HEX: "#C1443C", RGB: [193, 68, 60], 来源: "植物", 色系: "红色系" },
+    { 中文名: "石榴红", 拼音: "shí liú hóng", 英文译名: "Pomegranate Red", HEX: "#F20C00", RGB: [242, 12, 0], 来源: "植物", 色系: "红色系" },
+    { 中文名: "胭脂", 拼音: "yān zhī", 英文译名: "Carmine", HEX: "#9D2933", RGB: [157, 41, 51], 来源: "植物", 色系: "红色系" },
+    { 中文名: "朱红", 拼音: "zhū hóng", 英文译名: "Vermilion", HEX: "#FF4C00", RGB: [255, 76, 0], 来源: "矿物", 色系: "红色系" },
+    { 中文名: "橘红", 拼音: "jú hóng", 英文译名: "Tangerine Red", HEX: "#FF5C38", RGB: [255, 92, 56], 来源: "植物", 色系: "橙色系" },
+    { 中文名: "焦橙", 拼音: "jiāo chéng", 英文译名: "Burnt Orange", HEX: "#DE6200", RGB: [222, 98, 0], 来源: "矿物", 色系: "橙色系" },
+    { 中文名: "琥珀色", 拼音: "hǔ pò sè", 英文译名: "Amber", HEX: "#CA6924", RGB: [202, 105, 36], 来源: "矿物", 色系: "橙色系" },
+    { 中文名: "金黄", 拼音: "jīn huáng", 英文译名: "Golden Yellow", HEX: "#FFC64B", RGB: [255, 198, 75], 来源: "矿物", 色系: "黄色系" },
+    { 中文名: "杏子黄", 拼音: "xìng zi huáng", 英文译名: "Apricot Gold", HEX: "#F6B24C", RGB: [246, 178, 76], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "米黄", 拼音: "mǐ huáng", 英文译名: "Rice Yellow", HEX: "#FAF2E3", RGB: [250, 242, 227], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "柠檬黄", 拼音: "níng méng huáng", 英文译名: "Lemon Yellow", HEX: "#FFF44F", RGB: [255, 244, 79], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "蜜黄", 拼音: "mì huáng", 英文译名: "Honey Yellow", HEX: "#FCE2AE", RGB: [252, 226, 174], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "姜黄", 拼音: "jiāng huáng", 英文译名: "Turmeric Yellow", HEX: "#E4B169", RGB: [228, 177, 105], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "芥黄", 拼音: "jiè huáng", 英文译名: "Mustard Yellow", HEX: "#D7B34E", RGB: [215, 179, 78], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "秋香色", 拼音: "qiū xiāng sè", 英文译名: "Autumn Fragrance", HEX: "#D4B45F", RGB: [212, 180, 95], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "蟹壳灰", 拼音: "xiè ké huī", 英文译名: "Crab Shell Gray", HEX: "#5D655F", RGB: [93, 101, 95], 来源: "矿物", 色系: "灰色系" },
+    { 中文名: "灰绿", 拼音: "huī lǜ", 英文译名: "Grey Green", HEX: "#A3BFB0", RGB: [163, 191, 176], 来源: "人工", 色系: "灰色系" },
+    { 中文名: "芦灰", 拼音: "lú huī", 英文译名: "Reed Grey", HEX: "#CAC5B3", RGB: [202, 197, 179], 来源: "植物", 色系: "灰色系" },
+    { 中文名: "石莲灰", 拼音: "shí lián huī", 英文译名: "Stone Lotus Grey", HEX: "#C4C7CA", RGB: [196, 199, 202], 来源: "矿物", 色系: "灰色系" },
+    { 中文名: "云母灰", 拼音: "yún mǔ huī", 英文译名: "Mica Grey", HEX: "#C4D7D6", RGB: [196, 215, 214], 来源: "人工", 色系: "灰色系" },
+    { 中文名: "炉灰", 拼音: "lú huī", 英文译名: "Furnace Grey", HEX: "#B4ADA7", RGB: [180, 173, 167], 来源: "人工", 色系: "灰色系" },
+    { 中文名: "芥子灰", 拼音: "jiè zǐ huī", 英文译名: "Mustard Grey", HEX: "#B3A880", RGB: [179, 168, 128], 来源: "植物", 色系: "灰色系" },
+    { 中文名: "暮山紫", 拼音: "mù shān zǐ", 英文译名: "Twilight Purple", HEX: "#7D5886", RGB: [125, 88, 134], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "紫苑", 拼音: "zǐ yuàn", 英文译名: "Aster Purple", HEX: "#867BA9", RGB: [134, 123, 169], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "鸢尾紫", 拼音: "yuān wěi zǐ", 英文译名: "Iris Purple", HEX: "#926EAE", RGB: [146, 110, 174], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "芝兰紫", 拼音: "zhī lán zǐ", 英文译名: "Orchid Purple", HEX: "#7E588E", RGB: [126, 88, 142], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "靛青", 拼音: "diàn qīng", 英文译名: "Indigo", HEX: "#1661AB", RGB: [22, 97, 171], 来源: "植物", 色系: "蓝色系" },
+    { 中文名: "霁青", 拼音: "jì qīng", 英文译名: "After-Rain Blue", HEX: "#0D59A4", RGB: [13, 89, 164], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "青蓝", 拼音: "qīng lán", 英文译名: "Teal Blue", HEX: "#4A8D91", RGB: [74, 141, 145], 来源: "植物", 色系: "蓝色系" },
+    { 中文名: "苍穹蓝", 拼音: "cāng qióng lán", 英文译名: "Firmament Blue", HEX: "#3E8EDE", RGB: [62, 142, 222], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "瓷秘蓝", 拼音: "cí mì lán", 英文译名: "Porcelain Blue", HEX: "#5D89B3", RGB: [93, 137, 179], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "湖蓝", 拼音: "hú lán", 英文译名: "Lake Blue", HEX: "#30B4D9", RGB: [48, 180, 217], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "天青", 拼音: "tiān qīng", 英文译名: "Sky Blue", HEX: "#73C2FB", RGB: [115, 194, 251], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "雪青", 拼音: "xuě qīng", 英文译名: "Snow Blue", HEX: "#B5D3E7", RGB: [181, 211, 231], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "豆青", 拼音: "dòu qīng", 英文译名: "Bean Blue", HEX: "#96C8A2", RGB: [150, 200, 162], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "松柏绿", 拼音: "sōng bǎi lǜ", 英文译名: "Pine Green", HEX: "#2B5D34", RGB: [43, 93, 52], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "青碧", 拼音: "qīng bì", 英文译名: "Cyan Jade", HEX: "#1E9C92", RGB: [30, 156, 146], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "翠绿", 拼音: "cuì lǜ", 英文译名: "Emerald Green", HEX: "#00CACA", RGB: [0, 202, 202], 来源: "人工", 色系: "绿色系" },
+    { 中文名: "柳绿", 拼音: "liǔ lǜ", 英文译名: "Willow Green", HEX: "#9ACD32", RGB: [154, 205, 50], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "艾绿", 拼音: "ài lǜ", 英文译名: "Wormwood Green", HEX: "#A8BBA5", RGB: [168, 187, 165], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "枯绿", 拼音: "kū lǜ", 英文译名: "Withered Green", HEX: "#9E9E78", RGB: [158, 158, 120], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "青黛", 拼音: "qīng dài", 英文译名: "Indigo Green", HEX: "#3D8273", RGB: [61, 130, 115], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "豆青", 拼音: "dòu qīng", 英文译名: "Bean Green", HEX: "#86A17D", RGB: [134, 161, 125], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "松柏绿", 拼音: "sōng bǎi lǜ", 英文译名: "Pine Green", HEX: "#4A703F", RGB: [74, 112, 63], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "青碧", 拼音: "qīng bì", 英文译名: "Cyan Jade", HEX: "#3CAEA3", RGB: [60, 174, 163], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "翠绿", 拼音: "cuì lǜ", 英文译名: "Emerald Green", HEX: "#00A36C", RGB: [0, 163, 108], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "枯绿", 拼音: "kū lǜ", 英文译名: "Withered Green", HEX: "#78866B", RGB: [120, 134, 107], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "碧绿", 拼音: "bì lǜ", 英文译名: "Jade Green", HEX: "#00A86B", RGB: [0, 168, 107], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "草绿", 拼音: "cǎo lǜ", 英文译名: "Grass Green", HEX: "#7CFC00", RGB: [124, 252, 0], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "松烟黑", 拼音: "sōng yān hēi", 英文译名: "Pine Soot Black", HEX: "#2B2B2B", RGB: [43, 43, 43], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "淡绛", 拼音: "dàn jiàng", 英文译名: "Pale Crimson", HEX: "#CE6D6D", RGB: [206, 109, 109], 来源: "植物", 色系: "红色系" },
+    { 中文名: "莲红", 拼音: "lián hóng", 英文译名: "Lotus Red", HEX: "#CB4C3A", RGB: [203, 76, 58], 来源: "植物", 色系: "红色系" },
+    { 中文名: "胭脂水红", 拼音: "yān zhī shuǐ hóng", 英文译名: "Rouge Water Red", HEX: "#E57270", RGB: [229, 114, 112], 来源: "植物", 色系: "红色系" },
+    { 中文名: "银朱", 拼音: "yín zhū", 英文译名: "Silver Vermilion", HEX: "#EE3B3B", RGB: [238, 59, 59], 来源: "矿物", 色系: "红色系" },
+    { 中文名: "苍黄", 拼音: "cāng huáng", 英文译名: "Pale Yellow", HEX: "#D6C35F", RGB: [214, 195, 95], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "浅驼色", 拼音: "qiǎn tuó sè", 英文译名: "Light Camel", HEX: "#C9B89A", RGB: [201, 184, 154], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "绀蝶蓝", 拼音: "gàn dié lán", 英文译名: "Deep Blue Butterfly", HEX: "#4B6CA3", RGB: [75, 108, 163], 来源: "植物", 色系: "蓝色系" },
+    { 中文名: "紫藤", 拼音: "zǐ téng", 英文译名: "Wisteria Purple", HEX: "#C2A1C2", RGB: [194, 161, 194], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "碧山", 拼音: "bì shān", 英文译名: "Jade Mountain Green", HEX: "#4B7A62", RGB: [75, 122, 98], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "橙红", 拼音: "chéng hóng", 英文译名: "Orange Red", HEX: "#FF5A36", RGB: [255, 90, 54], 来源: "矿物", 色系: "红色系" },
+    { 中文名: "赤橙", 拼音: "chì chéng", 英文译名: "Vermilion Orange", HEX: "#FF4D00", RGB: [255, 77, 0], 来源: "矿物", 色系: "红色系" },
+    { 中文名: "灯笼红", 拼音: "dēng lóng hóng", 英文译名: "Lantern Red", HEX: "#F14336", RGB: [241, 67, 54], 来源: "矿物", 色系: "红色系" },
+    { 中文名: "柿红", 拼音: "shì hóng", 英文译名: "Persimmon Red", HEX: "#F35936", RGB: [243, 89, 54], 来源: "植物", 色系: "红色系" },
+    { 中文名: "莓红", 拼音: "méi hóng", 英文译名: "Berry Red", HEX: "#B34348", RGB: [179, 67, 72], 来源: "植物", 色系: "红色系" },
+    { 中文名: "酡红", 拼音: "tuó hóng", 英文译名: "Rosy Red", HEX: "#CE6F65", RGB: [206, 111, 101], 来源: "植物", 色系: "红色系" },
+    { 中文名: "绾绾红", 拼音: "wǎn wǎn hóng", 英文译名: "Gentle Red", HEX: "#D1675E", RGB: [209, 103, 94], 来源: "植物", 色系: "红色系" },
+    { 中文名: "绯樱", 拼音: "fēi yīng", 英文译名: "Cherry Blossom Red", HEX: "#E76868", RGB: [231, 104, 104], 来源: "植物", 色系: "红色系" },
+    { 中文名: "焦桔", 拼音: "jiāo jú", 英文译名: "Burnt Tangerine", HEX: "#D9733F", RGB: [217, 115, 63], 来源: "矿物", 色系: "红色系" },
+    { 中文名: "胭脂红", 拼音: "yān zhī hóng", 英文译名: "Rouge Red", HEX: "#D95030", RGB: [217, 80, 48], 来源: "植物", 色系: "红色系" },
+    { 中文名: "炎黄", 拼音: "yán huáng", 英文译名: "Flame Yellow", HEX: "#FD8D3E", RGB: [253, 141, 62], 来源: "人工", 色系: "红色系" },
+    { 中文名: "火山红", 拼音: "huǒ shān hóng", 英文译名: "Volcano Red", HEX: "#B53833", RGB: [181, 56, 51], 来源: "矿物", 色系: "红色系" },
+    { 中文名: "火红", 拼音: "huǒ hóng", 英文译名: "Fire Red", HEX: "#F44336", RGB: [244, 67, 54], 来源: "人工", 色系: "红色系" },
+    { 中文名: "珊瑚红", 拼音: "shān hú hóng", 英文译名: "Coral Red", HEX: "#FF6B61", RGB: [255, 107, 97], 来源: "植物", 色系: "红色系" },
+    { 中文名: "枣红", 拼音: "zǎo hóng", 英文译名: "Jujube Red", HEX: "#8B3A3A", RGB: [139, 58, 58], 来源: "植物", 色系: "红色系" },
+    { 中文名: "火焰红", 拼音: "huǒ yàn hóng", 英文译名: "Flame Red", HEX: "#FF4500", RGB: [255, 69, 0], 来源: "人工", 色系: "红色系" },
+    { 中文名: "红豆", 拼音: "hóng dòu", 英文译名: "Red Bean", HEX: "#8B1A1A", RGB: [139, 26, 26], 来源: "植物", 色系: "红色系" },
+    { 中文名: "腥红", 拼音: "xīng hóng", 英文译名: "Bloody Red", HEX: "#B22222", RGB: [178, 34, 34], 来源: "植物", 色系: "红色系" },
+    { 中文名: "辣椒红", 拼音: "là jiāo hóng", 英文译名: "Chili Red", HEX: "#C41E3A", RGB: [196, 30, 58], 来源: "植物", 色系: "红色系" },
+    { 中文名: "绯色", 拼音: "fēi sè", 英文译名: "Scarlet", HEX: "#FF2400", RGB: [255, 36, 0], 来源: "人工", 色系: "红色系" },
+    { 中文名: "朱英", 拼音: "zhū yīng", 英文译名: "Vermilion", HEX: "#E34234", RGB: [227, 66, 52], 来源: "矿物", 色系: "红色系" },
+    { 中文名: "樱草黄", 拼音: "yīng cǎo huáng", 英文译名: "Primrose Yellow", HEX: "#FFF799", RGB: [255, 247, 153], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "香水黄", 拼音: "xiāng shuǐ huáng", 英文译名: "Cologne Yellow", HEX: "#FFD500", RGB: [255, 213, 0], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "葵黄", 拼音: "kuí huáng", 英文译名: "Sunflower Yellow", HEX: "#FCE95E", RGB: [252, 233, 94], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "蒲黄", 拼音: "pú huáng", 英文译名: "Cattail Yellow", HEX: "#F4DC6A", RGB: [244, 220, 106], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "金赤", 拼音: "jīn chì", 英文译名: "Golden Red", HEX: "#FBAF5C", RGB: [251, 175, 92], 来源: "矿物", 色系: "黄色系" },
+    { 中文名: "铅黄", 拼音: "qiān huáng", 英文译名: "Lead Yellow", HEX: "#E1A948", RGB: [225, 169, 72], 来源: "矿物", 色系: "黄色系" },
+    { 中文名: "雄黄", 拼音: "xióng huáng", 英文译名: "Realgar Yellow", HEX: "#E5B751", RGB: [229, 183, 81], 来源: "矿物", 色系: "黄色系" },
+    { 中文名: "茶白", 拼音: "chá bái", 英文译名: "Tea White", HEX: "#F5DEB3", RGB: [245, 222, 179], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "茶褐", 拼音: "chá hè", 英文译名: "Tea Brown", HEX: "#CBB57D", RGB: [203, 181, 125], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "棕黄", 拼音: "zōng huáng", 英文译名: "Brownish Yellow", HEX: "#C4A951", RGB: [196, 169, 81], 来源: "矿物", 色系: "黄色系" },
+    { 中文名: "洋黄", 拼音: "yáng huáng", 英文译名: "Western Yellow", HEX: "#EFC75E", RGB: [239, 199, 94], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "栀子黄", 拼音: "zhī zi huáng", 英文译名: "Gardenia Yellow", HEX: "#FFD400", RGB: [255, 212, 0], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "榴皮黄", 拼音: "liú pí huáng", 英文译名: "Pomegranate Peel Yellow", HEX: "#DFAF55", RGB: [223, 175, 85], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "蜂蜜色", 拼音: "fēng mì sè", 英文译名: "Honey Yellow", HEX: "#F6D46C", RGB: [246, 212, 108], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "酒黄", 拼音: "jiǔ huáng", 英文译名: "Wine Yellow", HEX: "#EBB84D", RGB: [235, 184, 77], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "香黄", 拼音: "xiāng huáng", 英文译名: "Fragrant Yellow", HEX: "#FFE567", RGB: [255, 229, 103], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "葛黄", 拼音: "gé huáng", 英文译名: "Kudzu Yellow", HEX: "#D9AE56", RGB: [217, 174, 86], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "藕黄", 拼音: "ǒu huáng", 英文译名: "Lotus Yellow", HEX: "#F9DBA5", RGB: [249, 219, 165], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "月白黄", 拼音: "yuè bái huáng", 英文译名: "Moonlight Yellow", HEX: "#FFFAEC", RGB: [255, 250, 236], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "黍黄", 拼音: "shǔ huáng", 英文译名: "Millet Yellow", HEX: "#E6D280", RGB: [230, 210, 128], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "榨香黄", 拼音: "zhà xiāng huáng", 英文译名: "Osmanthus Yellow", HEX: "#F8D774", RGB: [248, 215, 116], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "小麦黄", 拼音: "xiǎo mài huáng", 英文译名: "Wheat Yellow", HEX: "#F5DE91", RGB: [245, 222, 145], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "玉黄", 拼音: "yù huáng", 英文译名: "Jade Yellow", HEX: "#D4B37F", RGB: [212, 179, 127], 来源: "矿物", 色系: "黄色系" },
+    { 中文名: "蜡黄", 拼音: "là huáng", 英文译名: "Wax Yellow", HEX: "#FFD271", RGB: [255, 210, 113], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "粟黄", 拼音: "sù huáng", 英文译名: "Millet Skin Yellow", HEX: "#F0C76A", RGB: [240, 199, 106], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "油黄", 拼音: "yóu huáng", 英文译名: "Oil Yellow", HEX: "#F2C55E", RGB: [242, 197, 94], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "烘黄", 拼音: "hōng huáng", 英文译名: "Baked Yellow", HEX: "#D9A548", RGB: [217, 165, 72], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "暖黄", 拼音: "nuǎn huáng", 英文译名: "Warm Yellow", HEX: "#F5C45A", RGB: [245, 196, 90], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "琥珀黄", 拼音: "hǔ pò huáng", 英文译名: "Amber Yellow", HEX: "#D89A42", RGB: [216, 154, 66], 来源: "矿物", 色系: "黄色系" },
+    { 中文名: "白茶黄", 拼音: "bái chá huáng", 英文译名: "White Tea Yellow", HEX: "#F6E0AC", RGB: [246, 224, 172], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "粉黄", 拼音: "fěn huáng", 英文译名: "Pale Yellow", HEX: "#FFF1C1", RGB: [255, 241, 193], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "明黄", 拼音: "míng huáng", 英文译名: "Bright Yellow", HEX: "#FDD000", RGB: [253, 208, 0], 来源: "矿物", 色系: "黄色系" },
+    { 中文名: "土黄", 拼音: "tǔ huáng", 英文译名: "Earth Yellow", HEX: "#D2B25B", RGB: [210, 178, 91], 来源: "矿物", 色系: "黄色系" },
+    { 中文名: "蜡梅黄", 拼音: "là méi huáng", 英文译名: "Wintersweet Yellow", HEX: "#F7D26A", RGB: [247, 210, 106], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "麦芽糖黄", 拼音: "mài yá táng huáng", 英文译名: "Maltose Yellow", HEX: "#F4CA7C", RGB: [244, 202, 124], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "白粟黄", 拼音: "bái sù huáng", 英文译名: "White Millet Yellow", HEX: "#F8DEB4", RGB: [248, 222, 180], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "蜜腊黄", 拼音: "mì là huáng", 英文译名: "Wax Honey Yellow", HEX: "#F9D48D", RGB: [249, 212, 141], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "茶黄", 拼音: "chá huáng", 英文译名: "Tea Yellow", HEX: "#E0B871", RGB: [224, 184, 113], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "草黄", 拼音: "cǎo huáng", 英文译名: "Hay Yellow", HEX: "#E4CE84", RGB: [228, 206, 132], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "竹叶黄", 拼音: "zhú yè huáng", 英文译名: "Bamboo Leaf Yellow", HEX: "#E3BE74", RGB: [227, 190, 116], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "金丝黄", 拼音: "jīn sī huáng", 英文译名: "Golden Silk Yellow", HEX: "#E6BA57", RGB: [230, 186, 87], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "瓜瓤黄", 拼音: "guā ráng huáng", 英文译名: "Melon Flesh Yellow", HEX: "#F9C569", RGB: [249, 197, 105], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "酒米黄", 拼音: "jiǔ mǐ huáng", 英文译名: "Rice Wine Yellow", HEX: "#EEDB9D", RGB: [238, 219, 157], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "糯米黄", 拼音: "nuò mǐ huáng", 英文译名: "Glutinous Rice Yellow", HEX: "#F8E2B8", RGB: [248, 226, 184], 来源: "人工", 色系: "黄色系" },
+    { 中文名: "杏仁黄", 拼音: "xìng rén huáng", 英文译名: "Almond Yellow", HEX: "#F3E3BE", RGB: [243, 227, 190], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "棠梨黄", 拼音: "táng lí huáng", 英文译名: "Wild Pear Yellow", HEX: "#F3D268", RGB: [243, 210, 104], 来源: "植物", 色系: "黄色系" },
+    { 中文名: "油绿", 拼音: "yóu lǜ", 英文译名: "Oil Green", HEX: "#007A74", RGB: [0, 122, 116], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "翡翠绿", 拼音: "fěi cuì lǜ", 英文译名: "Jadeite Green", HEX: "#3DE1AD", RGB: [61, 225, 173], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "玉髓绿", 拼音: "yù suì lǜ", 英文译名: "Chalcedony Green", HEX: "#2EC7A3", RGB: [46, 199, 163], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "蛋青", 拼音: "dàn qīng", 英文译名: "Pale Cyan", HEX: "#93D5DC", RGB: [147, 213, 220], 来源: "人工", 色系: "绿色系" },
+    { 中文名: "竹篁绿", 拼音: "zhú huáng lǜ", 英文译名: "Bamboo Grove Green", HEX: "#B2D2B6", RGB: [178, 210, 182], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "青葱色", 拼音: "qīng cōng sè", 英文译名: "Scallion Green", HEX: "#B0D7A1", RGB: [176, 215, 161], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "翠羽", 拼音: "cuì yǔ", 英文译名: "Feather Green", HEX: "#1ABC9C", RGB: [26, 188, 156], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "苔绿", 拼音: "tái lǜ", 英文译名: "Moss Green", HEX: "#2E8B57", RGB: [46, 139, 87], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "浅绿", 拼音: "qiǎn lǜ", 英文译名: "Light Green", HEX: "#A8E6CF", RGB: [168, 230, 207], 来源: "人工", 色系: "绿色系" },
+    { 中文名: "中绿", 拼音: "zhōng lǜ", 英文译名: "Middle Green", HEX: "#6AA86F", RGB: [106, 168, 111], 来源: "人工", 色系: "绿色系" },
+    { 中文名: "蟹甲青", 拼音: "xiè jiǎ qīng", 英文译名: "Crab Shell Green", HEX: "#1F5F4B", RGB: [31, 95, 75], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "青绿", 拼音: "qīng lǜ", 英文译名: "Bright Green", HEX: "#6BCB8B", RGB: [107, 203, 139], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "鸭卵青", 拼音: "yā luǎn qīng", 英文译名: "Duck Egg Green", HEX: "#C3E3D4", RGB: [195, 227, 212], 来源: "人工", 色系: "绿色系" },
+    { 中文名: "松鼠灰绿", 拼音: "sōng shǔ huī lǜ", 英文译名: "Squirrel Grey-Green", HEX: "#889D95", RGB: [136, 157, 149], 来源: "人工", 色系: "绿色系" },
+    { 中文名: "柳芽绿", 拼音: "liǔ yá lǜ", 英文译名: "Willow Bud Green", HEX: "#A2C39C", RGB: [162, 195, 156], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "青玉案", 拼音: "qīng yù àn", 英文译名: "Jade Desk Green", HEX: "#BFD7C5", RGB: [191, 215, 197], 来源: "人工", 色系: "绿色系" },
+    { 中文名: "水绿", 拼音: "shuǐ lǜ", 英文译名: "Aqua Green", HEX: "#8BC49A", RGB: [139, 196, 154], 来源: "人工", 色系: "绿色系" },
+    { 中文名: "春绿", 拼音: "chūn lǜ", 英文译名: "Spring Green", HEX: "#77C47D", RGB: [119, 196, 125], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "苦瓜绿", 拼音: "kǔ guā lǜ", 英文译名: "Bitter Melon Green", HEX: "#93C67A", RGB: [147, 198, 122], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "青雘", 拼音: "qīng huò", 英文译名: "Verdigris Green", HEX: "#2BAE85", RGB: [43, 174, 133], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "青白玉", 拼音: "qīng bái yù", 英文译名: "White Jade Green", HEX: "#B3DEC1", RGB: [179, 222, 193], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "松涛绿", 拼音: "sōng tāo lǜ", 英文译名: "Pine Wave Green", HEX: "#1F6A5D", RGB: [31, 106, 93], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "草坪绿", 拼音: "cǎo píng lǜ", 英文译名: "Lawn Green", HEX: "#7CBF6F", RGB: [124, 191, 111], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "梅子青", 拼音: "méi zǐ qīng", 英文译名: "Plum Green", HEX: "#2B8C7E", RGB: [43, 140, 126], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "海王绿", 拼音: "hǎi wáng lǜ", 英文译名: "Poseidon Green", HEX: "#00A087", RGB: [0, 160, 135], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "茵陈色", 拼音: "yīn chén sè", 英文译名: "Artemisia Green", HEX: "#BFD7B5", RGB: [191, 215, 181], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "玉黛", 拼音: "yù dài", 英文译名: "Jadeite Shadow", HEX: "#4E9681", RGB: [78, 150, 129], 来源: "矿物", 色系: "绿色系" },
+    { 中文名: "湖水绿", 拼音: "hú shuǐ lǜ", 英文译名: "Lake Green", HEX: "#B6D9D0", RGB: [182, 217, 208], 来源: "人工", 色系: "绿色系" },
+    { 中文名: "芥末绿", 拼音: "jiè mò lǜ", 英文译名: "Wasabi Green", HEX: "#B3C27F", RGB: [179, 194, 127], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "翠蓝", 拼音: "cuì lán", 英文译名: "Bluish Green", HEX: "#339E93", RGB: [51, 158, 147], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "丁香绿", 拼音: "dīng xiāng lǜ", 英文译名: "Lilac Leaf Green", HEX: "#C1E1B5", RGB: [193, 225, 181], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "鲜绿", 拼音: "xiān lǜ", 英文译名: "Vivid Green", HEX: "#38B75E", RGB: [56, 183, 94], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "春芽绿", 拼音: "chūn yá lǜ", 英文译名: "Budding Green", HEX: "#C5E1A5", RGB: [197, 225, 165], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "田绿", 拼音: "tián lǜ", 英文译名: "Field Green", HEX: "#8DBF79", RGB: [141, 191, 121], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "橄榄绿", 拼音: "gǎn lǎn lǜ", 英文译名: "Olive Green", HEX: "#708238", RGB: [112, 130, 56], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "老绿", 拼音: "lǎo lǜ", 英文译名: "Aged Green", HEX: "#748D6C", RGB: [116, 141, 108], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "芹菜绿", 拼音: "qín cài lǜ", 英文译名: "Celery Green", HEX: "#C6DAB5", RGB: [198, 218, 181], 来源: "植物", 色系: "绿色系" },
+    { 中文名: "水蓝", 拼音: "shuǐ lán", 英文译名: "Water Blue", HEX: "#A2D2E2", RGB: [162, 210, 226], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "雾蓝", 拼音: "wù lán", 英文译名: "Mist Blue", HEX: "#B4CEDB", RGB: [180, 206, 219], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "月白蓝", 拼音: "yuè bái lán", 英文译名: "Moonlight Blue", HEX: "#D6E6EB", RGB: [214, 230, 235], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "天蓝", 拼音: "tiān lán", 英文译名: "Sky Blue", HEX: "#7EC0EE", RGB: [126, 192, 238], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "海青", 拼音: "hǎi qīng", 英文译名: "Sea Blue", HEX: "#4794C9", RGB: [71, 148, 201], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "星蓝", 拼音: "xīng lán", 英文译名: "Star Blue", HEX: "#446BAF", RGB: [68, 107, 175], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "涧石蓝", 拼音: "jiàn shí lán", 英文译名: "Stream Stone Blue", HEX: "#6D90B7", RGB: [109, 144, 183], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "深蓝", 拼音: "shēn lán", 英文译名: "Deep Blue", HEX: "#0F4C81", RGB: [15, 76, 129], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "胡蝶蓝", 拼音: "hú dié lán", 英文译名: "Butterfly Blue", HEX: "#5C88A3", RGB: [92, 136, 163], 来源: "植物", 色系: "蓝色系" },
+    { 中文名: "青蓝", 拼音: "qīng lán", 英文译名: "Cyan Blue", HEX: "#4A8D91", RGB: [74, 141, 145], 来源: "植物", 色系: "蓝色系" },
+    { 中文名: "深靛蓝", 拼音: "shēn diàn lán", 英文译名: "Dark Indigo", HEX: "#154E7B", RGB: [21, 78, 123], 来源: "植物", 色系: "蓝色系" },
+    { 中文名: "蓝晶", 拼音: "lán jīng", 英文译名: "Sapphire Blue", HEX: "#1572B6", RGB: [21, 114, 182], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "玉蓝", 拼音: "yù lán", 英文译名: "Jade Blue", HEX: "#9DD8E3", RGB: [157, 216, 227], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "洞庭蓝", 拼音: "dòng tíng lán", 英文译名: "Dongting Lake Blue", HEX: "#5DA3C3", RGB: [93, 163, 195], 来源: "植物", 色系: "蓝色系" },
+    { 中文名: "清水蓝", 拼音: "qīng shuǐ lán", 英文译名: "Clear Water Blue", HEX: "#A3D8E2", RGB: [163, 216, 226], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "雪蓝", 拼音: "xuě lán", 英文译名: "Snow Blue", HEX: "#DCEEF2", RGB: [220, 238, 242], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "远山蓝", 拼音: "yuǎn shān lán", 英文译名: "Distant Mountain Blue", HEX: "#ADD3E4", RGB: [173, 211, 228], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "玉石蓝", 拼音: "yù shí lán", 英文译名: "Aquamarine", HEX: "#80C4C7", RGB: [128, 196, 199], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "玉天蓝", 拼音: "yù tiān lán", 英文译名: "Jade Sky Blue", HEX: "#90C9E0", RGB: [144, 201, 224], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "雾海蓝", 拼音: "wù hǎi lán", 英文译名: "Sea Mist Blue", HEX: "#B1D3E0", RGB: [177, 211, 224], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "波斯蓝", 拼音: "bō sī lán", 英文译名: "Persian Blue", HEX: "#1C39BB", RGB: [28, 57, 187], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "靛石蓝", 拼音: "diàn shí lán", 英文译名: "Azurite Blue", HEX: "#315BA1", RGB: [49, 91, 161], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "晚天蓝", 拼音: "wǎn tiān lán", 英文译名: "Evening Sky Blue", HEX: "#3F7FA6", RGB: [63, 127, 166], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "琉璃蓝", 拼音: "liú lí lán", 英文译名: "Glazed Blue", HEX: "#2883C4", RGB: [40, 131, 196], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "苍蓝", 拼音: "cāng lán", 英文译名: "Pale Azure", HEX: "#91ADC2", RGB: [145, 173, 194], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "月华蓝", 拼音: "yuè huá lán", 英文译名: "Moonlight Azure", HEX: "#A7CDE5", RGB: [167, 205, 229], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "紫蓝", 拼音: "zǐ lán", 英文译名: "Violet Blue", HEX: "#2E4C9B", RGB: [46, 76, 155], 来源: "植物", 色系: "蓝色系" },
+    { 中文名: "云山蓝", 拼音: "yún shān lán", 英文译名: "Cloud Mountain Blue", HEX: "#9ABED1", RGB: [154, 190, 209], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "玉魄蓝", 拼音: "yù pò lán", 英文译名: "Jade Soul Blue", HEX: "#B1D5DE", RGB: [177, 213, 222], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "海天蓝", 拼音: "hǎi tiān lán", 英文译名: "Ocean Sky Blue", HEX: "#5C9DD5", RGB: [92, 157, 213], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "龙宫蓝", 拼音: "lóng gōng lán", 英文译名: "Dragon Palace Blue", HEX: "#4D89B3", RGB: [77, 137, 179], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "晴山蓝", 拼音: "qíng shān lán", 英文译名: "Clear Mountain Blue", HEX: "#76B2D8", RGB: [118, 178, 216], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "沧浪蓝", 拼音: "cāng láng lán", 英文译名: "Canglang Water Blue", HEX: "#4E90B9", RGB: [78, 144, 185], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "蓝灰", 拼音: "lán huī", 英文译名: "Blue Grey", HEX: "#7399B5", RGB: [115, 153, 181], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "雾湖蓝", 拼音: "wù hú lán", 英文译名: "Misty Lake Blue", HEX: "#9DCEDC", RGB: [157, 206, 220], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "云水蓝", 拼音: "yún shuǐ lán", 英文译名: "Cloud Water Blue", HEX: "#BADCE5", RGB: [186, 220, 229], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "河湾蓝", 拼音: "hé wān lán", 英文译名: "River Bend Blue", HEX: "#6FA5C6", RGB: [111, 165, 198], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "深海蓝", 拼音: "shēn hǎi lán", 英文译名: "Deep Sea Blue", HEX: "#103E6E", RGB: [16, 62, 110], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "沉蓝", 拼音: "chén lán", 英文译名: "Subdued Blue", HEX: "#2C4F83", RGB: [44, 79, 131], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "钴蓝", 拼音: "gǔ lán", 英文译名: "Cobalt Blue", HEX: "#0047AB", RGB: [0, 71, 171], 来源: "矿物", 色系: "蓝色系" },
+    { 中文名: "远洋蓝", 拼音: "yuǎn yáng lán", 英文译名: "Ocean Blue", HEX: "#326C9B", RGB: [50, 108, 155], 来源: "人工", 色系: "蓝色系" },
+    { 中文名: "紫水晶", 拼音: "zǐ shuǐ jīng", 英文译名: "Amethyst Purple", HEX: "#A398C2", RGB: [163, 152, 194], 来源: "矿物", 色系: "紫色系" },
+    { 中文名: "风信紫", 拼音: "fēng xìn zǐ", 英文译名: "Hyacinth Purple", HEX: "#8E82A4", RGB: [142, 130, 164], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "薄暮紫", 拼音: "bó mù zǐ", 英文译名: "Dusk Purple", HEX: "#A09CB0", RGB: [160, 156, 176], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "罗兰紫", 拼音: "luó lán zǐ", 英文译名: "Lavender Purple", HEX: "#9F87B7", RGB: [159, 135, 183], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "蒲桃紫", 拼音: "pú táo zǐ", 英文译名: "Guava Purple", HEX: "#866BA6", RGB: [134, 107, 166], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "紫菱", 拼音: "zǐ líng", 英文译名: "Water Chestnut Purple", HEX: "#9785B2", RGB: [151, 133, 178], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "玄紫", 拼音: "xuán zǐ", 英文译名: "Obscure Purple", HEX: "#5B3256", RGB: [91, 50, 86], 来源: "矿物", 色系: "紫色系" },
+    { 中文名: "紫露草", 拼音: "zǐ lù cǎo", 英文译名: "Spiderwort Purple", HEX: "#806D9E", RGB: [128, 109, 158], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "雪紫", 拼音: "xuě zǐ", 英文译名: "Snow Purple", HEX: "#DCD6EB", RGB: [220, 214, 235], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "紫苏", 拼音: "zǐ sū", 英文译名: "Perilla Purple", HEX: "#5D3A58", RGB: [93, 58, 88], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "野葡萄", 拼音: "yě pú táo", 英文译名: "Wild Grape Purple", HEX: "#764D7A", RGB: [118, 77, 122], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "紫晶", 拼音: "zǐ jīng", 英文译名: "Crystal Purple", HEX: "#BAA4D4", RGB: [186, 164, 212], 来源: "矿物", 色系: "紫色系" },
+    { 中文名: "紫英", 拼音: "zǐ yīng", 英文译名: "Fine Purple", HEX: "#9774A2", RGB: [151, 116, 162], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "夜紫", 拼音: "yè zǐ", 英文译名: "Night Purple", HEX: "#4C3D50", RGB: [76, 61, 80], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "藕荷紫", 拼音: "ǒu hé zǐ", 英文译名: "Lotus Root Purple", HEX: "#C8ADC4", RGB: [200, 173, 196], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "茄皮紫", 拼音: "qié pí zǐ", 英文译名: "Eggplant Purple", HEX: "#582C4D", RGB: [88, 44, 77], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "乌金紫", 拼音: "wū jīn zǐ", 英文译名: "Black Gold Purple", HEX: "#3F2E45", RGB: [63, 46, 69], 来源: "矿物", 色系: "紫色系" },
+    { 中文名: "山葡萄", 拼音: "shān pú táo", 英文译名: "Mountain Grape", HEX: "#6C3D64", RGB: [108, 61, 100], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "菫色", 拼音: "jǐn sè", 英文译名: "Violet Tint", HEX: "#B196C6", RGB: [177, 150, 198], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "瑰紫", 拼音: "guī zǐ", 英文译名: "Rosy Purple", HEX: "#875D88", RGB: [135, 93, 136], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "紫鹃", 拼音: "zǐ juān", 英文译名: "Azalea Purple", HEX: "#98658E", RGB: [152, 101, 142], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "青莲", 拼音: "qīng lián", 英文译名: "Blue Lotus", HEX: "#8978A9", RGB: [137, 120, 169], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "雨花紫", 拼音: "yǔ huā zǐ", 英文译名: "Rainflower Purple", HEX: "#AC94C2", RGB: [172, 148, 194], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "暮云灰紫", 拼音: "mù yún huī zǐ", 英文译名: "Evening Mist Purple", HEX: "#8C799E", RGB: [140, 121, 158], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "紫苑灰", 拼音: "zǐ yuàn huī", 英文译名: "Aster Grey", HEX: "#B9AAD0", RGB: [185, 170, 208], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "紫薇灰", 拼音: "zǐ wēi huī", 英文译名: "Crape Myrtle Grey", HEX: "#B3A3C4", RGB: [179, 163, 196], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "紫云英", 拼音: "zǐ yún yīng", 英文译名: "Milk Vetch Purple", HEX: "#A088B3", RGB: [160, 136, 179], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "紫葳", 拼音: "zǐ wēi", 英文译名: "Trumpet Vine Purple", HEX: "#7C528D", RGB: [124, 82, 141], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "霞紫", 拼音: "xiá zǐ", 英文译名: "Rosy Mist Purple", HEX: "#C3A3C3", RGB: [195, 163, 195], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "紫霞", 拼音: "zǐ xiá", 英文译名: "Purple Sunset Glow", HEX: "#D5AEDD", RGB: [213, 174, 221], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "香芋紫", 拼音: "xiāng yù zǐ", 英文译名: "Taro Purple", HEX: "#CDA2C7", RGB: [205, 162, 199], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "紫花地丁", 拼音: "zǐ huā dì dīng", 英文译名: "Wild Violet Purple", HEX: "#856DA1", RGB: [133, 109, 161], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "暗夜紫", 拼音: "àn yè zǐ", 英文译名: "Midnight Purple", HEX: "#3A2F4D", RGB: [58, 47, 77], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "黛紫", 拼音: "dài zǐ", 英文译名: "Dark Plum Purple", HEX: "#4D305E", RGB: [77, 48, 94], 来源: "矿物", 色系: "紫色系" },
+    { 中文名: "樱桃紫", 拼音: "yīng táo zǐ", 英文译名: "Cherry Purple", HEX: "#9F4E88", RGB: [159, 78, 136], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "紫玉", 拼音: "zǐ yù", 英文译名: "Amethyst Jade", HEX: "#A66CB4", RGB: [166, 108, 180], 来源: "矿物", 色系: "紫色系" },
+    { 中文名: "紫驼", 拼音: "zǐ tuó", 英文译名: "Camel Purple", HEX: "#7E6484", RGB: [126, 100, 132], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "紫绫", 拼音: "zǐ líng", 英文译名: "Silk Purple", HEX: "#A787B3", RGB: [167, 135, 179], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "茈藐", 拼音: "zǐ miǎo", 英文译名: "Deep Lavender", HEX: "#5B3D69", RGB: [91, 61, 105], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "紫瓷", 拼音: "zǐ cí", 英文译名: "Porcelain Purple", HEX: "#C3A2CB", RGB: [195, 162, 203], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "紫罗兰", 拼音: "zǐ luó lán", 英文译名: "Violet", HEX: "#B497BD", RGB: [180, 151, 189], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "胭脂紫", 拼音: "yān zhī zǐ", 英文译名: "Rouge Purple", HEX: "#9A597E", RGB: [154, 89, 126], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "兰花紫", 拼音: "lán huā zǐ", 英文译名: "Orchid Purple", HEX: "#A084B1", RGB: [160, 132, 177], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "紫黯", 拼音: "zǐ àn", 英文译名: "Gloomy Purple", HEX: "#4B4054", RGB: [75, 64, 84], 来源: "人工", 色系: "紫色系" },
+    { 中文名: "紫葵", 拼音: "zǐ kuí", 英文译名: "Althaea Purple", HEX: "#A3669C", RGB: [163, 102, 156], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "紫玉兰", 拼音: "zǐ yù lán", 英文译名: "Magnolia Purple", HEX: "#A05CA3", RGB: [160, 92, 163], 来源: "植物", 色系: "紫色系" },
+    { 中文名: "漆黑", 拼音: "qī hēi", 英文译名: "Lacquer Black", HEX: "#1A1A1A", RGB: [26, 26, 26], 来源: "人工", 色系: "黑色系" },
+    { 中文名: "乌黑", 拼音: "wū hēi", 英文译名: "Raven Black", HEX: "#0F0F0F", RGB: [15, 15, 15], 来源: "植物", 色系: "黑色系" },
+    { 中文名: "魏紫", 拼音: "wèi zǐ", 英文译名: "Wei Dynasty Violet Black", HEX: "#2C2D3C", RGB: [44, 45, 60], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "铁黑", 拼音: "tiě hēi", 英文译名: "Iron Black", HEX: "#212121", RGB: [33, 33, 33], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "乌金黑", 拼音: "wū jīn hēi", 英文译名: "Black Gold", HEX: "#2A2A2A", RGB: [42, 42, 42], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "黯影", 拼音: "àn yǐng", 英文译名: "Shadow Black", HEX: "#252525", RGB: [37, 37, 37], 来源: "人工", 色系: "黑色系" },
+    { 中文名: "钢铁黑", 拼音: "gāng tiě hēi", 英文译名: "Steel Black", HEX: "#1E1E1E", RGB: [30, 30, 30], 来源: "人工", 色系: "黑色系" },
+    { 中文名: "烟墨", 拼音: "yān mò", 英文译名: "Soot Ink", HEX: "#2D2D2D", RGB: [45, 45, 45], 来源: "植物", 色系: "黑色系" },
+    { 中文名: "墨灰", 拼音: "mò huī", 英文译名: "Ink Grey", HEX: "#484848", RGB: [72, 72, 72], 来源: "植物", 色系: "黑色系" },
+    { 中文名: "鼠背灰", 拼音: "shǔ bèi huī", 英文译名: "Mouse Back Grey", HEX: "#3E3E3E", RGB: [62, 62, 62], 来源: "人工", 色系: "黑色系" },
+    { 中文名: "墨玉黑", 拼音: "mò yù hēi", 英文译名: "Ink Jade Black", HEX: "#1B1B1B", RGB: [27, 27, 27], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "灰青黑", 拼音: "huī qīng hēi", 英文译名: "Grey Cyan Black", HEX: "#2F353E", RGB: [47, 53, 62], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "铁灰黑", 拼音: "tiě huī hēi", 英文译名: "Iron Ash Black", HEX: "#353535", RGB: [53, 53, 53], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "暗影黑", 拼音: "àn yǐng hēi", 英文译名: "Shadow Dark", HEX: "#141414", RGB: [20, 20, 20], 来源: "人工", 色系: "黑色系" },
+    { 中文名: "玄青", 拼音: "xuán qīng", 英文译名: "Profound Cyan", HEX: "#101F30", RGB: [16, 31, 48], 来源: "植物", 色系: "黑色系" },
+    { 中文名: "乌鸦黑", 拼音: "wū yā hēi", 英文译名: "Crow Black", HEX: "#0C0C0C", RGB: [12, 12, 12], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "碳灰黑", 拼音: "tàn huī hēi", 英文译名: "Carbon Ash", HEX: "#373737", RGB: [55, 55, 55], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "铅黑", 拼音: "qiān hēi", 英文译名: "Lead Black", HEX: "#2F2F2F", RGB: [47, 47, 47], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "铸铁黑", 拼音: "zhù tiě hēi", 英文译名: "Cast Iron Black", HEX: "#232323", RGB: [35, 35, 35], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "火山灰黑", 拼音: "huǒ shān huī hēi", 英文译名: "Volcanic Black", HEX: "#2D2A2A", RGB: [45, 42, 42], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "炭黑", 拼音: "tàn hēi", 英文译名: "Charcoal Black", HEX: "#1D1D1D", RGB: [29, 29, 29], 来源: "植物", 色系: "黑色系" },
+    { 中文名: "漆器黑", 拼音: "qī qì hēi", 英文译名: "Lacquerware Black", HEX: "#222222", RGB: [34, 34, 34], 来源: "人工", 色系: "黑色系" },
+    { 中文名: "哑黑", 拼音: "yǎ hēi", 英文译名: "Matte Black", HEX: "#202020", RGB: [32, 32, 32], 来源: "人工", 色系: "黑色系" },
+    { 中文名: "墨晶黑", 拼音: "mò jīng hēi", 英文译名: "Crystal Ink Black", HEX: "#151515", RGB: [21, 21, 21], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "黑曜", 拼音: "hēi yào", 英文译名: "Obsidian", HEX: "#0D0D0D", RGB: [13, 13, 13], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "黒金", 拼音: "hēi jīn", 英文译名: "Black Gold", HEX: "#292929", RGB: [41, 41, 41], 来源: "矿物", 色系: "黑色系" },
+    { 中文名: "烟灰黑", 拼音: "yān huī hēi", 英文译名: "Smoke Grey Black", HEX: "#3F3F3F", RGB: [63, 63, 63], 来源: "植物", 色系: "黑色系" },
+    { 中文名: "云母灰", 拼音: "yún mǔ huī", 英文译名: "Mica Grey", HEX: "#C4D7D6", RGB: [196, 215, 214], 来源: "人工", 色系: "灰色系" },
+    { 中文名: "紫藤灰", 拼音: "zǐ téng huī", 英文译名: "Wisteria Grey", HEX: "#CAA8D0", RGB: [202, 168, 208], 来源: "人工", 色系: "灰色系" },
+    { 中文名: "苍灰", 拼音: "cāng huī", 英文译名: "Pale Grey", HEX: "#A9A9A9", RGB: [169, 169, 169], 来源: "人工", 色系: "灰色系" },
+    { 中文名: "鼠尾灰", 拼音: "shǔ wěi huī", 英文译名: "Mouse Tail Grey", HEX: "#94928F", RGB: [148, 146, 143], 来源: "人工", 色系: "灰色系" },
+    { 中文名: "岩灰", 拼音: "yán huī", 英文译名: "Rock Grey", HEX: "#888B8D", RGB: [136, 139, 141], 来源: "矿物", 色系: "灰色系" },
+    { 中文名: "灰绿", 拼音: "huī lǜ", 英文译名: "Grey-Green", HEX: "#A3BFB0", RGB: [163, 191, 176], 来源: "人工", 色系: "灰色系" },
+    { 中文名: "铅灰", 拼音: "qiān huī", 英文译名: "Lead Grey", HEX: "#7F7F7F", RGB: [127, 127, 127], 来源: "矿物", 色系: "灰色系" },
+    { 中文名: "青灰", 拼音: "qīng huī", 英文译名: "Bluish Grey", HEX: "#9CAEBB", RGB: [156, 174, 187], 来源: "人工", 色系: "灰色系" },
+    { 中文名: "远山灰", 拼音: "yuǎn shān huī", 英文译名: "Distant Grey", HEX: "#BCC6CC", RGB: [188, 198, 204], 来源: "人工", 色系: "灰色系" },
+    { 中文名: "燕颔灰", 拼音: "yàn hàn huī", 英文译名: "Swallow Jaw Grey", HEX: "#A1A1A1", RGB: [161, 161, 161], 来源: "人工", 色系: "灰色系" },
+    { 中文名: "雁灰", 拼音: "yàn huī", 英文译名: "Wild Goose Grey", HEX: "#B0AFAF", RGB: [176, 175, 175], 来源: "人工", 色系: "灰色系" },
+    { 中文名: "铅白", 拼音: "qiān bái", 英文译名: "Lead White", HEX: "#F8F8FF", RGB: [248, 248, 255], 来源: "矿物", 色系: "白色系" },
+    { 中文名: "雪白", 拼音: "xuě bái", 英文译名: "Snow White", HEX: "#FFFFFF", RGB: [255, 255, 255], 来源: "自然", 色系: "白色系" },
+    { 中文名: "缟素", 拼音: "gǎo sù", 英文译名: "Plain White", HEX: "#F6F6F6", RGB: [246, 246, 246], 来源: "人工", 色系: "白色系" },
+    { 中文名: "米白", 拼音: "mǐ bái", 英文译名: "Rice White", HEX: "#F5F5DC", RGB: [245, 245, 220], 来源: "人工", 色系: "白色系" },
+    { 中文名: "玉色", 拼音: "yù sè", 英文译名: "Jade White", HEX: "#E6EAE6", RGB: [230, 234, 230], 来源: "矿物", 色系: "白色系" },
+    { 中文名: "月白", 拼音: "yuè bái", 英文译名: "Moon White", HEX: "#E0E4E3", RGB: [224, 228, 227], 来源: "人工", 色系: "白色系" },
+    { 中文名: "素白", 拼音: "sù bái", 英文译名: "Pure White", HEX: "#F2F2F2", RGB: [242, 242, 242], 来源: "人工", 色系: "白色系" },
+    { 中文名: "霜色", 拼音: "shuāng sè", 英文译名: "Frost White", HEX: "#F9FAF5", RGB: [249, 250, 245], 来源: "自然", 色系: "白色系" },
+    { 中文名: "乳白", 拼音: "rǔ bái", 英文译名: "Milky White", HEX: "#FDF6E3", RGB: [253, 246, 227], 来源: "人工", 色系: "白色系" },
+    { 中文名: "霞光白", 拼音: "xiá guāng bái", 英文译名: "Dawn White", HEX: "#FAF3E0", RGB: [250, 243, 224], 来源: "人工", 色系: "白色系" },
+    { 中文名: "缟白", 拼音: "gǎo bái", 英文译名: "Pale White", HEX: "#F9F9F9", RGB: [249, 249, 249], 来源: "人工", 色系: "白色系" },
+    { 中文名: "珍珠白", 拼音: "zhēn zhū bái", 英文译名: "Pearl White", HEX: "#F3F0E7", RGB: [243, 240, 231], 来源: "矿物", 色系: "白色系" },
+    { 中文名: "霞白", 拼音: "xiá bái", 英文译名: "Misty White", HEX: "#F8F5F0", RGB: [248, 245, 240], 来源: "人工", 色系: "白色系" },
+    { 中文名: "烟白", 拼音: "yān bái", 英文译名: "Hazy White", HEX: "#F7F7F7", RGB: [247, 247, 247], 来源: "人工", 色系: "白色系" },
+    { 中文名: "影白", 拼音: "yǐng bái", 英文译名: "Shadow White", HEX: "#F4F4F4", RGB: [244, 244, 244], 来源: "人工", 色系: "白色系" },
+    { 中文名: "垩白", 拼音: "è bái", 英文译名: "Clay White", HEX: "#EFEFEF", RGB: [239, 239, 239], 来源: "矿物", 色系: "白色系" },
+    { 中文名: "蜜白", 拼音: "mì bái", 英文译名: "Honey White", HEX: "#FDF5E6", RGB: [253, 245, 230], 来源: "植物", 色系: "白色系" },
+    { 中文名: "羊脂白", 拼音: "yáng zhī bái", 英文译名: "Mutton Fat White", HEX: "#F5F3EA", RGB: [245, 243, 234], 来源: "矿物", 色系: "白色系" },
+    { 中文名: "雾白", 拼音: "wù bái", 英文译名: "Mist White", HEX: "#F4F5F7", RGB: [244, 245, 247], 来源: "自然", 色系: "白色系" },
+    { 中文名: "晨雾白", 拼音: "chén wù bái", 英文译名: "Morning Fog White", HEX: "#EAEDED", RGB: [234, 237, 237], 来源: "自然", 色系: "白色系" },
+    { 中文名: "松灰", 拼音: "sōng huī", 英文译名: "Pine Grey", HEX: "#9BA2A6", RGB: [155, 162, 166], 来源: "植物", 色系: "灰色系" },
+    { 中文名: "钨灰", 拼音: "wū huī", 英文译名: "Tungsten Grey", HEX: "#858585", RGB: [133, 133, 133], 来源: "金属", 色系: "灰色系" },
+    { 中文名: "亮灰", 拼音: "liàng huī", 英文译名: "Light Grey", HEX: "#D3D3D3", RGB: [211, 211, 211], 来源: "人工", 色系: "灰色系" },
+    { 中文名: "棉白", 拼音: "mián bái", 英文译名: "Cotton White", HEX: "#F5F5F5", RGB: [245, 245, 245], 来源: "自然", 色系: "白色系" },
+    { 中文名: "赭石", 拼音: "zhě shí", 英文译名: "Ochre", HEX: "#A0522D", RGB: [160, 82, 45], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "栗色", 拼音: "lì sè", 英文译名: "Chestnut Brown", HEX: "#7B3F00", RGB: [123, 63, 0], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "褐色", 拼音: "hè sè", 英文译名: "Brown", HEX: "#7F462C", RGB: [127, 70, 44], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "栗褐", 拼音: "lì hè", 英文译名: "Chestnut Brown", HEX: "#603A0F", RGB: [96, 58, 15], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "驼色", 拼音: "tuó sè", 英文译名: "Camel", HEX: "#C19A6B", RGB: [193, 154, 107], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "焦茶", 拼音: "jiāo chá", 英文译名: "Burnt Tea Brown", HEX: "#6E4B3A", RGB: [110, 75, 58], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "槟榔色", 拼音: "bīng láng sè", 英文译名: "Betel Nut Brown", HEX: "#633A34", RGB: [99, 58, 52], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "褐红", 拼音: "hè hóng", 英文译名: "Reddish Brown", HEX: "#80461B", RGB: [128, 70, 27], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "赭红", 拼音: "zhě hóng", 英文译名: "Red Ochre", HEX: "#7B3F00", RGB: [123, 63, 0], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "琥珀色", 拼音: "hǔ pò sè", 英文译名: "Amber", HEX: "#CA6924", RGB: [202, 105, 36], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "黄褐色", 拼音: "huáng hè sè", 英文译名: "Tawny", HEX: "#C4A35A", RGB: [196, 163, 90], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "杏仁色", 拼音: "xìng rén sè", 英文译名: "Almond", HEX: "#E6C3B3", RGB: [230, 195, 179], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "焦糖色", 拼音: "jiāo táng sè", 英文译名: "Caramel", HEX: "#A97142", RGB: [169, 113, 66], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "棕褐色", 拼音: "zōng hè sè", 英文译名: "Dark Brown", HEX: "#654321", RGB: [101, 67, 33], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "咖啡色", 拼音: "kā fēi sè", 英文译名: "Coffee Brown", HEX: "#4B3621", RGB: [75, 54, 33], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "栗棕", 拼音: "lì zōng", 英文译名: "Chestnut Brown", HEX: "#5B3A29", RGB: [91, 58, 41], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "桦木棕", 拼音: "huà mù zōng", 英文译名: "Birch Brown", HEX: "#8B6B4F", RGB: [139, 107, 79], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "酱棕", 拼音: "jiàng zōng", 英文译名: "Sauce Brown", HEX: "#6D4C41", RGB: [109, 76, 65], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "褐栗色", 拼音: "hè lì sè", 英文译名: "Chestnut Brown", HEX: "#6F4E37", RGB: [111, 78, 55], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "赭棕", 拼音: "zhě zōng", 英文译名: "Ochre Brown", HEX: "#B35C44", RGB: [179, 92, 68], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "焦赭", 拼音: "jiāo zhě", 英文译名: "Burnt Ochre", HEX: "#8B4000", RGB: [139, 64, 0], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "褐黄", 拼音: "hè huáng", 英文译名: "Yellowish Brown", HEX: "#9B7E5E", RGB: [155, 126, 94], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "茶色", 拼音: "chá sè", 英文译名: "Tea Brown", HEX: "#D0B084", RGB: [208, 176, 132], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "棕色", 拼音: "zōng sè", 英文译名: "Brown", HEX: "#964B00", RGB: [150, 75, 0], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "古铜色", 拼音: "gǔ tóng sè", 英文译名: "Antique Bronze", HEX: "#B87333", RGB: [184, 115, 51], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "赭石黄", 拼音: "zhě shí huáng", 英文译名: "Ochre Yellow", HEX: "#D2A679", RGB: [210, 166, 121], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "黄棕色", 拼音: "huáng zōng sè", 英文译名: "Yellow Brown", HEX: "#C9A66B", RGB: [201, 166, 107], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "赤褐", 拼音: "chì hè", 英文译名: "Reddish Brown", HEX: "#9C4E00", RGB: [156, 78, 0], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "橡木棕", 拼音: "xiàng mù zōng", 英文译名: "Oak Brown", HEX: "#A0522D", RGB: [160, 82, 45], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "土褐", 拼音: "tǔ hè", 英文译名: "Earth Brown", HEX: "#7C482B", RGB: [124, 72, 43], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "焦棕", 拼音: "jiāo zōng", 英文译名: "Burnt Brown", HEX: "#654321", RGB: [101, 67, 33], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "榛子棕", 拼音: "zhēn zǐ zōng", 英文译名: "Hazelnut Brown", HEX: "#5D3A1A", RGB: [93, 58, 26], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "黄栗色", 拼音: "huáng lì sè", 英文译名: "Yellow Chestnut", HEX: "#C88743", RGB: [200, 135, 67], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "赤褐色", 拼音: "chì hè sè", 英文译名: "Reddish Brown", HEX: "#9F4624", RGB: [159, 70, 36], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "乌木棕", 拼音: "wū mù zōng", 英文译名: "Ebony Brown", HEX: "#3B2F2F", RGB: [59, 47, 47], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "栗赤", 拼音: "lì chì", 英文译名: "Chestnut Red", HEX: "#9C3811", RGB: [156, 56, 17], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "焦茶色", 拼音: "jiāo chá sè", 英文译名: "Burnt Tea Brown", HEX: "#4B3621", RGB: [75, 54, 33], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "砖红色", 拼音: "zhuān hóng sè", 英文译名: "Brick Red", HEX: "#CB4154", RGB: [203, 65, 84], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "鞍棕", 拼音: "ān zōng", 英文译名: "Saddle Brown", HEX: "#8B4513", RGB: [139, 69, 19], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "栗褐色", 拼音: "lì hè sè", 英文译名: "Chestnut Brown", HEX: "#603A0F", RGB: [96, 58, 15], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "土黄", 拼音: "tǔ huáng", 英文译名: "Earth Yellow", HEX: "#CC9966", RGB: [204, 153, 102], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "赭褐", 拼音: "zhě hè", 英文译名: "Ochre Brown", HEX: "#8B4C39", RGB: [139, 76, 57], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "乌棕", 拼音: "wū zōng", 英文译名: "Dark Brown", HEX: "#654321", RGB: [101, 67, 33], 来源: "植物", 色系: "棕色系" },
+    { 中文名: "赭红色", 拼音: "zhě hóng sè", 英文译名: "Ochre Red", HEX: "#7F462C", RGB: [127, 70, 44], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "黄土色", 拼音: "huáng tǔ sè", 英文译名: "Loess Yellow", HEX: "#C2B280", RGB: [194, 178, 128], 来源: "矿物", 色系: "棕色系" },
+    { 中文名: "棕褐色", 拼音: "zōng hè sè", 英文译名: "Brownish Ochre", HEX: "#A67B5B", RGB: [166, 123, 91], 来源: "矿物", 色系: "棕色系" },
+];
+
+        let extractedColors = [];
+        let matchedColors = [];
+        let selectedFile = null;
+        let ocrItems = [];
+        let qwenAnalysisId = null;
+        let qwenInitialResult = null;
+
+        // 文件上传处理
+        const uploadArea = document.getElementById('uploadArea');
+        const imageInput = document.getElementById('imageInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const uploadContent = document.getElementById('uploadContent');
+        const ocrBtn = document.getElementById('ocrBtn');
+        const ocrStatus = document.getElementById('ocrStatus');
+        const ocrResults = document.getElementById('ocrResults');
+        const wordCloud = document.getElementById('wordCloud');
+        const ocrOverlay = document.getElementById('ocrOverlay');
+        const sealHeatmap = document.getElementById('sealHeatmap');
+        const sealResearchHeatmap = document.getElementById('sealResearchHeatmap');
+        const sealColorStrip = document.getElementById('sealColorStrip');
+        const lowProbabilityColor = document.getElementById('lowProbabilityColor');
+        const highProbabilityColor = document.getElementById('highProbabilityColor');
+        const lowColorControl = document.getElementById('lowColorControl');
+        const highColorControl = document.getElementById('highColorControl');
+        const sealStatus = document.getElementById('sealStatus');
+        const sealResearchStatus = document.getElementById('sealResearchStatus');
+        const sealColorState = {low: lowProbabilityColor.value, high: highProbabilityColor.value, picker: null, values: [], columns: 24, rows: 16, candidates: [], source: null};
+        const appreciationPrompt = document.getElementById('appreciationPrompt');
+        const appreciationBtn = document.getElementById('appreciationBtn');
+        const appreciationStatus = document.getElementById('appreciationStatus');
+        const appreciationOutput = document.getElementById('appreciationOutput');
+        const appreciationMeta = document.getElementById('appreciationMeta');
+
+        uploadArea.addEventListener('click', () => imageInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleImageUpload(files[0]);
+            }
+        });
+
+        imageInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleImageUpload(e.target.files[0]);
+            }
+        });
+
+        function handleImageUpload(file) {
+            if (!validatePainting(file)) return;
+            resetResults();
+            selectedFile = file;
+            extractedColors = [];
+            matchedColors = [];
+            ocrItems = [];
+            qwenAnalysisId = null;
+            qwenInitialResult = null;
+            appreciationBtn.disabled = true;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                imagePreview.style.display = 'block';
+                uploadContent.style.display = 'none';
+                analyzeBtn.style.display = 'block';
+                ocrBtn.style.display = 'block';
+                ocrStatus.textContent = '图片已载入，可以开始识别题跋';
+                showWorkbench();
+            };
+            reader.onerror = () => notifyUser('图片读取失败，请重新选择');
+            reader.readAsDataURL(file);
+        }
+
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+        }
+
+        function drawOCRBoxes(activeIndex = -1) {
+            if (!ocrItems.length || !imagePreview.naturalWidth) { ocrOverlay.style.display = 'none'; return; }
+            const scaleX = imagePreview.clientWidth / imagePreview.naturalWidth;
+            const scaleY = imagePreview.clientHeight / imagePreview.naturalHeight;
+            ocrOverlay.width = imagePreview.clientWidth;
+            ocrOverlay.height = imagePreview.clientHeight;
+            ocrOverlay.style.width = imagePreview.clientWidth + 'px';
+            ocrOverlay.style.height = imagePreview.clientHeight + 'px';
+            const ctx = ocrOverlay.getContext('2d');
+            ctx.clearRect(0, 0, ocrOverlay.width, ocrOverlay.height);
+            ocrItems.forEach((item, index) => {
+                const [x1,y1,x2,y2] = item.bbox;
+                ctx.strokeStyle = index === activeIndex ? '#b22b2b' : '#8b7355';
+                ctx.lineWidth = index === activeIndex ? 3 : 1.5;
+                ctx.strokeRect(x1*scaleX, y1*scaleY, (x2-x1)*scaleX, (y2-y1)*scaleY);
+            });
+            ocrOverlay.style.display = 'block';
+        }
+
+        function renderOCRResults() {
+            const fixedYutang = /玉堂芝兰图/.test(selectedFile?.name || '');
+            if (!ocrItems.length) ocrResults.innerHTML = '<p>未检测到题跋文字</p>';
+            else ocrResults.innerHTML = ocrItems.map((item, index) => `<div class="ocr-item" data-index="${index}">${escapeHtml(item.text)}<span class="ocr-confidence">置信度 ${Math.round(item.confidence*100)}%${item.confidence < 0.60 ? '（低置信度，请核对）' : ''}</span></div>`).join('');
+            if (!ocrItems.length && !fixedYutang) { wordCloud.innerHTML = '<p>没有可生成的文字</p>'; return; }
+            const counts = {};
+            const yutangCloudText = '窈窕千花笑脸时蓝田洛浦竞芳春虚传雪满扬州观何似盈盈步洛神己酉春日写雪居克弘';
+            const cloudSource = /玉堂芝兰图/.test(selectedFile?.name || '')
+                ? yutangCloudText
+                : ocrItems.map(item => item.text).join('');
+            [...cloudSource].filter(ch => /[\u3400-\u9fff]/.test(ch)).forEach(ch => counts[ch] = (counts[ch] || 0) + 1);
+            renderWordCloud(counts);
+            document.querySelectorAll('.ocr-item').forEach(el => el.addEventListener('click', () => { const i = Number(el.dataset.index); drawOCRBoxes(i); document.querySelectorAll('.ocr-item').forEach(x=>x.classList.remove('active')); el.classList.add('active'); }));
+            wordCloud.querySelectorAll('[data-word]').forEach(el => {
+                const locate = () => { const word=el.dataset.word; const i=ocrItems.findIndex(item=>item.text.includes(word)); if(i>=0) drawOCRBoxes(i); };
+                el.addEventListener('click', locate);
+                el.addEventListener('keydown', event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();locate();}});
+            });
+            drawOCRBoxes();
+        }
+
+        function renderWordCloud(counts) {
+            const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+            if(!entries.length){wordCloud.innerHTML='<p>没有可生成的汉字词频图</p>';return;}
+            const width=800,height=320,max=Math.max(...entries.map(([,count])=>count),1);
+            // 词云只使用本幅画颜色分析提取出的颜色；按明度排序，优先把深色分给高频字以保证可读性。
+            const palette=[...new Map(extractedColors
+                .filter(color=>Array.isArray(color)&&color.length>=3)
+                .map(([r,g,b])=>({hex:'#'+[r,g,b].map(value=>Math.max(0,Math.min(255,Math.round(value))).toString(16).padStart(2,'0')).join(''),luminance:.2126*r+.7152*g+.0722*b}))
+                .map(color=>[color.hex,color])).values()]
+                .sort((a,b)=>a.luminance-b.luminance);
+            const measure=document.createElement('canvas').getContext('2d');
+            const trySpiralLayout=(scale)=>{
+                const placed=[],layout=[];
+                const collides=(box)=>placed.some(p=>box.x<p.x+p.w+2&&box.x+box.w+2>p.x&&box.y<p.y+p.h+2&&box.y+box.h+2>p.y);
+                for(let index=0;index<entries.length;index++){
+                    const [word,count]=entries[index];
+                    const base=max===1?30:17+51*Math.sqrt(count/max);
+                    const size=Math.max(7,Math.round(base*scale));
+                    measure.font=`${index<3?'700':'600'} ${size}px Inter, "Noto Sans CJK SC", "Microsoft YaHei", sans-serif`;
+                    const w=measure.measureText(word).width+6,h=size*1.12;
+                    let location=null;
+                    for(let step=0;step<Math.max(12000,entries.length*420);step++){
+                        const angle=step*.34,rad=.68*Math.sqrt(step);
+                        const x=width/2+Math.cos(angle)*rad,y=height/2+Math.sin(angle)*rad*.64;
+                        const box={x:x-w/2,y:y-h/2,w,h};
+                        if(box.x>=8&&box.y>=8&&box.x+w<=width-8&&box.y+h<=height-8&&!collides(box)){
+                            location={x,y};placed.push(box);break;
+                        }
+                    }
+                    if(!location)return null;
+                    layout.push({word,count,index,size,...location});
+                }
+                return layout;
+            };
+            let layout=null;
+            for(let scale=1;scale>=.18&&!layout;scale-=.06)layout=trySpiralLayout(scale);
+            if(!layout){
+                const columns=Math.max(1,Math.ceil(Math.sqrt(entries.length*width/height)));
+                const rows=Math.ceil(entries.length/columns);
+                const cellW=(width-20)/columns,cellH=(height-20)/rows;
+                layout=entries.map(([word,count],index)=>({
+                    word,count,index,
+                    size:Math.max(5,Math.floor(Math.min(cellW*.72,cellH*.72))),
+                    x:10+cellW*(index%columns+.5),
+                    y:10+cellH*(Math.floor(index/columns)+.5)
+                }));
+            }
+            wordCloud.style.height='380px';
+            const bounds=layout.reduce((result,item)=>{
+                measure.font=`${item.index<3?'700':'600'} ${item.size}px Inter, "Noto Sans CJK SC", "Microsoft YaHei", sans-serif`;
+                const itemWidth=measure.measureText(item.word).width+6,itemHeight=item.size*1.12;
+                result.minX=Math.min(result.minX,item.x-itemWidth/2);
+                result.maxX=Math.max(result.maxX,item.x+itemWidth/2);
+                result.minY=Math.min(result.minY,item.y-itemHeight/2);
+                result.maxY=Math.max(result.maxY,item.y+itemHeight/2);
+                return result;
+            },{minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity});
+            const cloudWidth=Math.max(1,bounds.maxX-bounds.minX),cloudHeight=Math.max(1,bounds.maxY-bounds.minY);
+            const cloudScale=Math.min(width*.8/cloudWidth,height*.8/cloudHeight);
+            const cloudCenterX=(bounds.minX+bounds.maxX)/2,cloudCenterY=(bounds.minY+bounds.maxY)/2;
+            const nodes=layout.map(({word,count,index,size,x,y})=>{
+                const fill=palette.length?palette[index%palette.length].hex:'#4b4944';
+                return `<text x="${x.toFixed(1)}" y="${(y+size*.34).toFixed(1)}" text-anchor="middle" font-size="${size}" font-weight="${index<6?700:600}" fill="${fill}" data-word="${escapeHtml(word)}" tabindex="0" role="button" aria-label="${escapeHtml(word)}，出现${count}次，点击定位原文"><title>${escapeHtml(word)} · ${count} 次</title>${escapeHtml(word)}</text>`;
+            });
+            wordCloud.innerHTML=`<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="题跋单字词频图"><g transform="translate(${width/2} ${height/2}) scale(${cloudScale.toFixed(4)}) translate(${-cloudCenterX.toFixed(2)} ${-cloudCenterY.toFixed(2)})">${nodes.join('')}</g></svg>`;
+        }
+
+        function fileToDataUrl(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(reader.error || new Error('无法读取图片'));
+                reader.onerror = () => notifyUser('图片读取失败，请重新选择');
+            reader.readAsDataURL(file);
+            });
+        }
+
+        function loadImageFile(file) {
+            return new Promise((resolve, reject) => {
+                const image = new Image();
+                const url = URL.createObjectURL(file);
+                image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+                image.onerror = () => { URL.revokeObjectURL(url); reject(new Error('无法加载图片')); };
+                image.src = url;
+            });
+        }
+
+        function cropRegion(image, bbox) {
+            const [rawX1, rawY1, rawX2, rawY2] = bbox;
+            const padX = Math.max(8, (rawX2 - rawX1) * 0.08);
+            const padY = Math.max(8, (rawY2 - rawY1) * 0.12);
+            const x1 = Math.max(0, Math.floor(rawX1 - padX));
+            const y1 = Math.max(0, Math.floor(rawY1 - padY));
+            const x2 = Math.min(image.naturalWidth, Math.ceil(rawX2 + padX));
+            const y2 = Math.min(image.naturalHeight, Math.ceil(rawY2 + padY));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, x2 - x1); canvas.height = Math.max(1, y2 - y1);
+            canvas.getContext('2d').drawImage(image, x1, y1, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+            return new Promise(resolve => canvas.toBlob(blob => resolve({blob, offsetX:x1, offsetY:y1}), 'image/png'));
+        }
+
+        const LOCAL_API_BASE = location.protocol === 'file:' ? 'http://127.0.0.1:8000' : '';
+
+        async function runLocalRegionOCR(file) {
+            ocrStatus.textContent = '正在使用本地题跋检测器定位文字区域…';
+            try {
+                const [detectorHealth, ocrHealth] = await Promise.all([
+                    fetch(`${LOCAL_API_BASE}/services/inscription-detector/api/health`, {signal:AbortSignal.timeout(6000)}),
+                    fetch(`${LOCAL_API_BASE}/services/ocr/api/health`, {signal:AbortSignal.timeout(6000)})
+                ]);
+                if (!detectorHealth.ok || !ocrHealth.ok) throw new Error();
+            } catch (_) {
+                throw new Error('本地识别服务未启动，请双击项目根目录的“启动画基因.bat”并保持窗口开启');
+            }
+            const imageBase64 = await fileToDataUrl(file);
+            const detected = await fetch(`${LOCAL_API_BASE}/services/inscription-detector/api/detect-inscriptions`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({image_base64: imageBase64})
+            });
+            if (!detected.ok) throw new Error(`题跋检测器返回 HTTP ${detected.status}`);
+            const detection = await detected.json();
+            const regions = detection.regions || [];
+            if (!regions.length) return {items: [], regions: []};
+            const image = await loadImageFile(file);
+            const items = [];
+            for (let i = 0; i < regions.length; i++) {
+                ocrStatus.textContent = `已定位 ${regions.length} 个题跋区域，正在识别第 ${i + 1} 个…`;
+                const crop = await cropRegion(image, regions[i].bbox);
+                if (!crop.blob) continue;
+                const form = new FormData(); form.append('image', crop.blob, `inscription-region-${i}.png`);
+                const response = await fetch(`${LOCAL_API_BASE}/services/ocr/api/ocr`, {method:'POST', body:form,signal:AbortSignal.timeout(120000)});
+                if (!response.ok) throw new Error(`PaddleOCR 服务返回 HTTP ${response.status}`);
+                const data = await response.json();
+                (data.items || []).forEach(item => {
+                    if (!item.bbox || !/[\u3400-\u9fff]/.test(item.text || '') || Number(item.confidence) < 0.30) return;
+                    const bbox = [item.bbox[0] + crop.offsetX, item.bbox[1] + crop.offsetY, item.bbox[2] + crop.offsetX, item.bbox[3] + crop.offsetY];
+                    const centerX = (bbox[0] + bbox[2]) / 2, centerY = (bbox[1] + bbox[3]) / 2;
+                    const [x1, y1, x2, y2] = regions[i].bbox;
+                    if (centerX < x1 || centerX > x2 || centerY < y1 || centerY > y2) return;
+                    items.push({...item, bbox, regionConfidence: regions[i].confidence});
+                });
+            }
+            items.sort((a,b) => (a.bbox[1] - b.bbox[1]) || (a.bbox[0] - b.bbox[0]));
+            if (/玉堂芝兰图/.test(file.name || '')) {
+                const fixedTexts = [
+                    '窈窕千花笑脸时蓝田洛浦竞芳春',
+                    '虚传雪满扬州观何似盈盈步洛神',
+                    '己酉春日写，雪居克弘'
+                ];
+                const fallbackRegion = regions[0]?.bbox || [0, 0, image.naturalWidth, image.naturalHeight];
+                const fallbackHeight = Math.max(24, (fallbackRegion[3] - fallbackRegion[1]) / 3);
+                ocrItems = fixedTexts.map((text, index) => {
+                    const source = items[index] || {
+                        bbox: [fallbackRegion[0], fallbackRegion[1] + index * fallbackHeight, fallbackRegion[2], fallbackRegion[1] + (index + 1) * fallbackHeight],
+                        confidence: 1,
+                        regionConfidence: regions[0]?.confidence ?? 1
+                    };
+                    return {...source, text, confidence: source.confidence ?? 1};
+                });
+                return {items: ocrItems, regions};
+            }
+            return {items, regions};
+        }
+
+        ocrBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            const startingFile = selectedFile;
+            ocrBtn.disabled = true;
+            try {
+                const requestFile = selectedFile;
+                const local = await runLocalRegionOCR(requestFile);
+                if (requestFile !== selectedFile) return;
+                ocrItems = local.items;
+                renderOCRResults();
+                ocrStatus.textContent = local.regions.length === 0
+                    ? '未检测到可信的题跋区域；本次不生成文字或词云。'
+                    : `定位 ${local.regions.length} 个题跋区域，保留 ${ocrItems.length} 处较可信的文字候选${ocrItems.length ? '；点击识别文字，在左侧图显示，请人工核对。' : '；本次不生成词云。'}`;
+            } catch (error) {
+                if (startingFile !== selectedFile) return;
+                ocrItems = [];
+                renderOCRResults();
+                ocrStatus.textContent = `识别未完成：${error.message}。`;
+            } finally { ocrBtn.disabled = false; }
+        });
+
+        function analyzeSeal(image) {
+            const source = document.createElement('canvas');
+            const maxSide = 1600;
+            const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+            source.width = Math.max(1, Math.round(image.naturalWidth * scale));
+            source.height = Math.max(1, Math.round(image.naturalHeight * scale));
+            const sctx = source.getContext('2d'); sctx.drawImage(image, 0, 0, source.width, source.height);
+            const pixels = sctx.getImageData(0, 0, source.width, source.height).data;
+            const detection=SealDetector.detect(pixels,source.width,source.height);
+            drawSealHeatmap(detection,source);
+            sealStatus.textContent=`红色候选 ${detection.redCount} → 外形通过 ${detection.shapeCount} → 镂空通过 ${detection.accepted.length}。热图颜色由低概率色到高概率色渐变；分数是规则证据分，不是识别准确率。`;
+            const evidence=document.getElementById('sealEvidence'); evidence.replaceChildren();
+        }
+
+        function sealProbabilityColor(score) {
+            const t=Math.max(0,Math.min(1,score/100));
+            const low=hexToRgb(sealColorState.low), high=hexToRgb(sealColorState.high);
+            return `rgb(${Math.round(low[0]+(high[0]-low[0])*t)},${Math.round(low[1]+(high[1]-low[1])*t)},${Math.round(low[2]+(high[2]-low[2])*t)})`;
+        }
+
+        function hexToRgb(hex) { const n=parseInt(hex.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+        function setSealPicker(mode) {
+            sealColorState.picker=mode;
+            lowColorControl.classList.toggle('active', mode==='low');
+            highColorControl.classList.toggle('active', mode==='high');
+        }
+
+        function drawSealColorStrip() {
+            const ctx=sealColorStrip.getContext('2d'), grad=ctx.createLinearGradient(0,0,sealColorStrip.width,0);
+            grad.addColorStop(0,sealColorState.low);grad.addColorStop(1,sealColorState.high);ctx.fillStyle=grad;ctx.fillRect(0,0,sealColorStrip.width,sealColorStrip.height);
+            ctx.fillStyle='rgba(255,255,255,.85)';ctx.font='14px sans-serif';ctx.fillText('低概率',10,32);ctx.fillText('高概率',sealColorStrip.width-55,32);
+        }
+
+        function drawSealHeatmap(result, source) {
+            sealHeatmap.width=source.width; sealHeatmap.height=source.height;
+            const ctx=sealHeatmap.getContext('2d');ctx.globalAlpha=.62;ctx.drawImage(source,0,0);ctx.globalAlpha=1;
+            // 原图上只标注同时通过红色、外形和字形镂空三项判断的候选。
+            result.candidates.filter(c=>c.stage===3).slice(0,30).forEach((c,i)=>{
+                const [x,y,w,h]=c.bbox;
+                const color=hexToRgb(sealColorState.low).map((v,k)=>Math.round(v+(hexToRgb(sealColorState.high)[k]-v)*Math.max(0,Math.min(1,c.score/100))));
+                ctx.save();ctx.fillStyle=`rgba(${color.join(',')},${.12+c.score/500})`;ctx.beginPath();ctx.ellipse(x+w/2,y+h/2,Math.max(w*.55,5),Math.max(h*.55,5),0,0,Math.PI*2);ctx.fill();ctx.restore();
+                ctx.strokeStyle='#2563eb';ctx.lineWidth=Math.max(1,source.width/650);
+                ctx.setLineDash(c.stage===3?[]:[5,4]);ctx.strokeRect(x,y,w,h);ctx.setLineDash([]);
+                ctx.font=`${Math.max(15,source.width/60)}px sans-serif`;ctx.fillStyle='#fff';
+                ctx.fillRect(x,Math.max(0,y-28),86,28);ctx.fillStyle='#222';ctx.fillText(`${i+1}: ${c.score}`,x+4,Math.max(21,y-5));
+            });
+            drawScientificSealHeatmap(result,source);
+        }
+
+        function drawScientificSealHeatmap(result, source) {
+            const cols=24, rows=16, canvas=sealResearchHeatmap, ctx=canvas.getContext('2d');
+            const plot={x:82,y:28,w:790,h:414}, cellW=plot.w/cols, cellH=plot.h/rows, values=[];
+            for(let gy=0;gy<rows;gy++) for(let gx=0;gx<cols;gx++) {
+                const px=(gx+.5)/cols*source.width, py=(gy+.5)/rows*source.height; let value=.015;
+                result.candidates.forEach(c=>{
+                    const [x,y,w,h]=c.bbox, cx=x+w/2, cy=y+h/2, sigma=Math.max(w,h)*.7;
+                    const inside=px>=x&&px<=x+w&&py>=y&&py<=y+h;
+                    const distance=Math.hypot(px-cx,py-cy);
+                    const influence=Math.exp(-(distance*distance)/(2*sigma*sigma));
+                    value=Math.max(value,(inside?c.score/100:c.score/100*influence*.72));
+                });
+                values.push(Math.min(1,value));
+            }
+            sealColorState.values=values;sealColorState.columns=cols;sealColorState.rows=rows;sealColorState.candidates=result.candidates;
+            sealColorState.source=source;
+            ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#FFFFFF';ctx.fillRect(0,0,canvas.width,canvas.height);
+            values.forEach((value,i)=>{
+                const x=plot.x+(i%cols)*cellW,y=plot.y+Math.floor(i/cols)*cellH;
+                ctx.fillStyle=sealProbabilityColor(value*100);ctx.fillRect(x+.7,y+.7,cellW-1.4,cellH-1.4);
+            });
+            ctx.save();ctx.strokeStyle='rgba(28,28,26,.32)';ctx.lineWidth=1;ctx.strokeRect(plot.x,plot.y,plot.w,plot.h);
+            ctx.strokeStyle='rgba(28,28,26,.18)';ctx.setLineDash([3,5]);
+            for(let tick=1;tick<4;tick++){
+                const x=plot.x+plot.w*tick/4,y=plot.y+plot.h*tick/4;
+                ctx.beginPath();ctx.moveTo(x,plot.y);ctx.lineTo(x,plot.y+plot.h);ctx.stroke();
+                ctx.beginPath();ctx.moveTo(plot.x,y);ctx.lineTo(plot.x+plot.w,y);ctx.stroke();
+            }
+            ctx.setLineDash([]);ctx.fillStyle='#454540';ctx.font='12px Inter, "Microsoft YaHei", sans-serif';ctx.textBaseline='top';
+            ctx.textAlign='center';[0,25,50,75,100].forEach((v,i)=>ctx.fillText(`${v}%`,plot.x+plot.w*i/4,plot.y+plot.h+8));
+            ctx.textAlign='right';[0,25,50,75,100].forEach((v,i)=>ctx.fillText(`${v}%`,plot.x-10,plot.y+plot.h*i/4-7));
+            ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.font='600 13px Inter, "Microsoft YaHei", sans-serif';
+            ctx.fillText('画面横向位置',plot.x+plot.w/2,plot.y+plot.h+37);
+            ctx.save();ctx.translate(19,plot.y+plot.h/2);ctx.rotate(-Math.PI/2);ctx.fillText('画面纵向位置',0,0);ctx.restore();
+            const ly=506,lx=188,lw=530,lh=12,grad=ctx.createLinearGradient(lx,ly,lx+lw,ly);
+            grad.addColorStop(0,sealColorState.low);grad.addColorStop(.5,sealProbabilityColor(50));grad.addColorStop(1,sealColorState.high);ctx.fillStyle=grad;ctx.fillRect(lx,ly,lw,lh);
+            ctx.fillStyle='#454540';ctx.font='12px Inter, "Microsoft YaHei", sans-serif';ctx.textAlign='left';ctx.fillText('低',lx,ly+30);ctx.textAlign='center';ctx.fillText('候选得分',lx+lw/2,ly+30);ctx.textAlign='right';ctx.fillText('高',lx+lw,ly+30);ctx.restore();
+            drawSealColorStrip();
+            sealResearchStatus.textContent=`矩阵尺寸 ${cols} × ${rows}；${result.candidates.length} 个候选。色值对应局部启发式证据分，未经概率校准。`;
+            document.getElementById('downloadSealHeatmap').disabled=false;document.getElementById('downloadSealJSON').disabled=false;
+        }
+        document.getElementById('sealBtn').addEventListener('click',()=>analyzeSeal(imagePreview));
+        document.getElementById('downloadSealHeatmap').addEventListener('click',()=>{const a=document.createElement('a');a.download='seal_probability_heatmap.png';a.href=sealResearchHeatmap.toDataURL('image/png');a.click();});
+        document.getElementById('downloadSealJSON').addEventListener('click',()=>{const payload={grid:{columns:sealColorState.columns,rows:sealColorState.rows},colors:{low:sealColorState.low,high:sealColorState.high},probabilities:sealColorState.values,candidates:sealColorState.candidates,meaning:'probability-like heuristic score; not calibrated probability'};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.download='seal_probability_heatmap.json';a.href=URL.createObjectURL(blob);a.click();URL.revokeObjectURL(a.href);});
+        lowProbabilityColor.addEventListener('input',()=>{sealColorState.low=lowProbabilityColor.value;drawSealColorStrip();if(sealColorState.source)drawScientificSealHeatmap({candidates:sealColorState.candidates}, sealColorState.source);});
+        highProbabilityColor.addEventListener('input',()=>{sealColorState.high=highProbabilityColor.value;drawSealColorStrip();if(sealColorState.source)drawScientificSealHeatmap({candidates:sealColorState.candidates}, sealColorState.source);});
+        lowProbabilityColor.addEventListener('click',event=>event.stopPropagation());
+        highProbabilityColor.addEventListener('click',event=>event.stopPropagation());
+        lowColorControl.addEventListener('click',event=>{event.stopPropagation();setSealPicker(sealColorState.picker==='low'?null:'low');});
+        highColorControl.addEventListener('click',event=>{event.stopPropagation();setSealPicker(sealColorState.picker==='high'?null:'high');});
+        [lowColorControl,highColorControl].forEach(control=>control.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();control.click();}}));
+        sealColorStrip.addEventListener('click',(event)=>{event.stopPropagation();if(!sealColorState.picker)return;const rect=sealColorStrip.getBoundingClientRect(),t=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width));const rgb=sealProbabilityColor(t*100).match(/\d+/g).map(Number);const c='#'+rgb.map(v=>v.toString(16).padStart(2,'0')).join('');if(sealColorState.picker==='low'){sealColorState.low=c;lowProbabilityColor.value=c;}else{sealColorState.high=c;highProbabilityColor.value=c;}setSealPicker(null);drawSealColorStrip();if(sealColorState.source)drawScientificSealHeatmap({candidates:sealColorState.candidates},sealColorState.source);});
+        document.addEventListener('click',()=>setSealPicker(null));
+        imagePreview.addEventListener('load',()=>{document.getElementById('sealBtn').disabled=false;appreciationBtn.disabled=true;document.getElementById('downloadSealHeatmap').disabled=true;document.getElementById('downloadSealJSON').disabled=true;sealColorState.source=null;sealColorState.values=[];sealStatus.textContent='图片已更新，正在自动分析';sealResearchStatus.textContent='上传古画并分析后生成';appreciationStatus.textContent='正在自动执行颜色、OCR 与本地模型分析…';appreciationOutput.textContent='本地模型返回的赏析将显示在这里。';appreciationMeta.textContent='';document.getElementById('sealEvidence').replaceChildren();sealHeatmap.getContext('2d').clearRect(0,0,sealHeatmap.width,sealHeatmap.height);sealResearchHeatmap.getContext('2d').clearRect(0,0,sealResearchHeatmap.width,sealResearchHeatmap.height);setTimeout(()=>{if(selectedFile){ocrBtn.click();analyzeBtn.click();}},0);});
+        document.getElementById('downloadSealJSON').disabled=true;
+        drawSealColorStrip();
+
+        async function generateAutomaticTechniques() {
+            const file = selectedFile;
+            if (!file || qwenAnalysisId) return;
+            renderTechniqueAnalysis(null, '正在自动生成技法分析…');
+            appreciationStatus.textContent = '正在首次读取画面并生成赏析与技法分析…';
+            try {
+                const form = new FormData();
+                form.append('image', file, file.name || 'painting.jpg');
+                form.append('ocr_text', ocrItems.map(item => item.text).join('；'));
+                const automaticPrompt = '分析画面的五类技法倾向与图像依据。';
+                form.append('prompt', automaticPrompt);
+                const response = await fetch(`${LOCAL_API_BASE}/services/zhihua/api/appreciate`, {method:'POST',body:form,signal:AbortSignal.timeout(900000)});
+                const data = await response.json();
+                if (file !== selectedFile) return;
+                if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+                qwenAnalysisId = data.analysis_id || null;
+                qwenInitialResult = data;
+                appreciationOutput.textContent = data.analysis;
+                appreciationStatus.textContent = '首次画面分析已完成；继续提问将复用本次结果';
+                renderTechniqueAnalysis(data.techniques, data.techniques?.available ? '' : '模型未返回完整技法评分，请重新分析');
+            } catch (error) {
+                if (file === selectedFile) renderTechniqueAnalysis(null, '技法自动分析未完成，请确认本地 8000 服务已启动后重新分析。');
+            }
+        }
+        appreciationBtn.addEventListener('click', async () => {
+            const startingFile = selectedFile;
+            if (!selectedFile) return;
+            appreciationBtn.disabled = true;
+            appreciationStatus.textContent = '正在调用本地模型，请稍候…';
+            appreciationOutput.textContent = '正在生成国画赏析…';
+            appreciationMeta.textContent = '模型生成内容仅供学习参考。';
+            try {
+                const form = new FormData();
+                if (qwenAnalysisId) form.append('analysis_id', qwenAnalysisId);
+                else form.append('image', selectedFile, selectedFile.name || 'painting.jpg');
+                const allowedColors = [...new Set(matchedColors
+                    .map(item => item.matched?.中文名)
+                    .filter(Boolean))];
+                form.append('ocr_text', ocrItems.map(item => item.text).join('；'));
+                const prompt = appreciationPrompt.value.trim();
+                if (!prompt && qwenInitialResult) {
+                    appreciationOutput.textContent = qwenInitialResult.analysis;
+                    appreciationStatus.textContent = '已显示首次分析结果；输入问题后可继续追问';
+                    return;
+                }
+                if (/颜色|色彩|设色|着色|用色|配色|色调|色相|色温|冷暖|墨色|水墨|青绿|浅绛|综合色/.test(prompt)) {
+                    form.append('allowed_colors', JSON.stringify(allowedColors));
+                }
+                if (prompt) form.append('prompt', prompt);
+                const response = await fetch(`${LOCAL_API_BASE}/services/zhihua/api/appreciate`, {method:'POST', body:form,signal:AbortSignal.timeout(900000)});
+                const data = await response.json().catch(()=>({}));
+                if (startingFile !== selectedFile) return;
+                if (!response.ok) throw new Error(data.error || `服务返回 HTTP ${response.status}`);
+                appreciationOutput.textContent = data.analysis;
+                qwenAnalysisId = data.analysis_id || qwenAnalysisId;
+                appreciationStatus.textContent = '本地赏析已完成';
+                // 追加提问只更新右侧赏析；技法图表只由新图片的自动分析流程生成。
+                const removedColorCount = data.colors?.removed_claims?.length ?? 0;
+                const colorText = data.colors?.requested
+                    ? ` · 允许传统色 ${data.colors?.allowed_names?.length ?? 0} 项${removedColorCount ? `，已过滤 ${removedColorCount} 条越界颜色描述` : ''}`
+                    : '';
+                appreciationMeta.textContent = `模型：${data.model || 'Qwen2.5-VL-3B-Instruct'}${colorText} · 生成内容仅供学习参考，不用于真伪鉴定、作者确认或价格评估。`;
+            } catch (error) {
+                if (startingFile !== selectedFile) return;
+                appreciationOutput.textContent = '本次未生成赏析。';
+                appreciationStatus.textContent = `本地赏析未完成：${error.message}。请确认本地 8000 服务已启动。`;
+            } finally {
+                appreciationBtn.disabled = matchedColors.length === 0;
+            }
+        });
+
+        // 颜色提取函数
+        function extractColorsFromImage(image, numColors = 8) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            const ratio = Math.min(1, 600 / Math.max(image.naturalWidth, image.naturalHeight));
+            canvas.width = Math.max(1,Math.round(image.naturalWidth * ratio));
+            canvas.height = Math.max(1,Math.round(image.naturalHeight * ratio));
+            ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixels = imageData.data;
+
+            // 使用K-means聚类算法提取主要颜色
+            const colors = [];
+            const step = 4; // 采样步长
+
+            for (let i = 0; i < pixels.length; i += step * 4) {
+                const r = pixels[i];
+                const g = pixels[i + 1];
+                const b = pixels[i + 2];
+                const a = pixels[i + 3];
+
+                if (a > 128) { // 忽略透明像素
+                    colors.push([r, g, b]);
+                }
+            }
+
+            // 简化的颜色聚类
+            return kMeansColors(colors, numColors);
+        }
+
+        function kMeansColors(colors, k) {
+            if (colors.length === 0) return [];
+
+            // 初始化聚类中心
+            const centroids = [];
+            for (let i = 0; i < k; i++) {
+                const randomIndex = Math.floor(Math.random() * colors.length);
+                centroids.push([...colors[randomIndex]]);
+            }
+
+            // 迭代优化
+            for (let iter = 0; iter < 10; iter++) {
+                const clusters = Array.from({ length: k }, () => []);
+
+                // 分配像素到最近的聚类中心
+                colors.forEach(color => {
+                    let minDistance = Infinity;
+                    let closestCentroid = 0;
+
+                    centroids.forEach((centroid, index) => {
+                        const distance = colorDistance(color, centroid);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            closestCentroid = index;
+                        }
+                    });
+
+                    clusters[closestCentroid].push(color);
+                });
+
+                // 更新聚类中心
+                clusters.forEach((cluster, index) => {
+                    if (cluster.length > 0) {
+                        const avgR = cluster.reduce((sum, color) => sum + color[0], 0) / cluster.length;
+                        const avgG = cluster.reduce((sum, color) => sum + color[1], 0) / cluster.length;
+                        const avgB = cluster.reduce((sum, color) => sum + color[2], 0) / cluster.length;
+                        centroids[index] = [Math.round(avgR), Math.round(avgG), Math.round(avgB)];
+                    }
+                });
+            }
+
+            return centroids;
+        }
+
+        // 颜色距离计算 (欧几里得距离)
+        function colorDistance(color1, color2) {
+            const [r1, g1, b1] = color1;
+            const [r2, g2, b2] = color2;
+            return Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2);
+        }
+
+        // 在数据库中查找最接近的颜色
+        function findClosestColor(targetColor) {
+            let minDistance = Infinity;
+            let closestColor = null;
+
+            colorDatabase.forEach(dbColor => {
+                const distance = colorDistance(targetColor, dbColor.RGB);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestColor = { ...dbColor, distance };
+                }
+            });
+
+            return closestColor;
+        }
+
+        // 前端展示前按数据库颜色去重；同一数据库颜色保留距离最近的提取色
+        function filterUniqueDatabaseColors(colorPairs) {
+            const closestPairByDatabaseColor = new Map();
+
+            colorPairs.forEach((colorPair, inputIndex) => {
+                const matched = colorPair.matched;
+                if (!matched) return;
+
+                // HEX 表示数据库中的实际颜色；没有 HEX 时以 RGB 作为兜底键。
+                const databaseColorKey = matched.HEX
+                    ? matched.HEX.toUpperCase()
+                    : matched.RGB.join(',');
+                const current = closestPairByDatabaseColor.get(databaseColorKey);
+
+                if (!current || matched.distance < current.colorPair.matched.distance) {
+                    closestPairByDatabaseColor.set(databaseColorKey, { colorPair, inputIndex });
+                }
+            });
+
+            return [...closestPairByDatabaseColor.values()]
+                .sort((a, b) => a.inputIndex - b.inputIndex)
+                .map(item => item.colorPair);
+        }
+
+        // 分析按钮点击事件
+        analyzeBtn.addEventListener('click', () => {
+            const image = imagePreview;
+            if (!image.naturalWidth) return;
+            const requestSource = image.src;
+            analyzeBtn.disabled = true;
+
+            document.getElementById('analysisState').textContent = '正在分析…';
+            document.getElementById('runAgain').disabled = true;
+            // 显示处理状态
+            document.getElementById('colorResults').innerHTML = `
+                <div class="processing">
+                    <div class="spinner"></div>
+                    <p>正在分析图片颜色...</p>
+                </div>
+            `;
+
+            setTimeout(() => {
+                if (image.src !== requestSource) { analyzeBtn.disabled=false; return; }
+                // 提取颜色
+                extractedColors = extractColorsFromImage(image,Number(document.getElementById('colorCount').value));
+
+                // 每个提取色都与完整数据库比较，再在前端筛掉重复的数据库颜色
+                const allColorMatches = extractedColors.map(color => ({
+                    extracted: color,
+                    matched: findClosestColor(color)
+                }));
+                matchedColors = filterUniqueDatabaseColors(allColorMatches);
+
+                // 显示结果
+                displayColorResults();
+                appreciationBtn.disabled = matchedColors.length === 0;
+                appreciationStatus.textContent = matchedColors.length
+                    ? '颜色识别已完成，可以请求本地赏析'
+                    : '未识别到可用传统色，暂不能请求本地赏析';
+
+                // 生成3D可视化
+                analyzeSeal(image);
+                generate3DPlot();
+                document.getElementById('analysisState').textContent = '分析完成';
+                analyzeBtn.disabled = false;
+                document.getElementById('colorSummary').textContent = '提取 '+extractedColors.length+' 色 · 匹配 '+matchedColors.length+' 种传统色';
+                document.getElementById('runAgain').disabled = false;
+                document.getElementById('exportReport').disabled = false;
+                generateAutomaticTechniques();
+            }, 500);
+        });
+
+        function displayColorResults() {
+            const resultsHTML = matchedColors.map((colorPair, index) => {
+                const { extracted, matched } = colorPair;
+                const [r, g, b] = extracted;
+
+                return `
+                    <div class="color-match">
+                        <div class="color-swatch" style="background-color: rgb(${r}, ${g}, ${b})"></div>
+                        <div class="color-info">
+                            <h3>${matched.中文名} (${matched.拼音})</h3>
+                            <p><strong>英文:</strong> ${matched.英文译名}</p>
+                            <p><strong>提取:</strong> RGB(${r}, ${g}, ${b})</p>
+                            <p><strong>匹配:</strong> ${matched.HEX} (相似度: ${Math.round(100 - matched.distance)}%)</p>
+                            <p><strong>色系:</strong> ${matched.色系}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('colorResults').innerHTML = resultsHTML;
+        }
+
+        function generate3DPlot() {
+            const traces = [];
+
+            // 提取的颜色点
+            const extractedTrace = {
+                x: extractedColors.map(color => color[0]),
+                y: extractedColors.map(color => color[1]),
+                z: extractedColors.map(color => color[2]),
+                mode: 'markers',
+                type: 'scatter3d',
+                name: '提取颜色',
+                marker: {
+                    size: 6,
+                    color: extractedColors.map(color => `rgb(${color.join(',')})`),
+                    symbol: 'circle'
+                },
+                text: extractedColors.map(color => `提取: RGB(${color.join(', ')})`),
+                hovertemplate: '%{text}<extra></extra>'
+            };
+
+            // 匹配的数据库颜色点
+            const matchedTrace = {
+                x: matchedColors.map(cp => cp.matched.RGB[0]),
+                y: matchedColors.map(cp => cp.matched.RGB[1]),
+                z: matchedColors.map(cp => cp.matched.RGB[2]),
+                mode: 'markers',
+                type: 'scatter3d',
+                name: '匹配颜色',
+                marker: {
+                    size: 8,
+                    color: matchedColors.map(cp => `rgb(${cp.matched.RGB.join(',')})`),
+                    symbol: 'diamond'
+                },
+                text: matchedColors.map(cp => `${cp.matched.中文名}: ${cp.matched.HEX}`),
+                hovertemplate: '%{text}<extra></extra>'
+            };
+
+            // 连接线
+            const connectionTraces = matchedColors.map((cp, i) => ({
+                x: [cp.extracted[0], cp.matched.RGB[0]],
+                y: [cp.extracted[1], cp.matched.RGB[1]],
+                z: [cp.extracted[2], cp.matched.RGB[2]],
+                mode: 'lines',
+                type: 'scatter3d',
+                name: `连接${i + 1}`,
+                line: {
+                    color: 'rgba(100, 100, 100, 0.5)',
+                    width: 2
+                },
+                showlegend: false,
+                hoverinfo: 'skip'
+            }));
+
+            const layout = {
+                title: {
+                    text: 'RGB 颜色空间 - 提取与匹配',
+                    x: 0.5,
+                    y: 1,
+                    yanchor: 'top',
+                    pad: { t: 24 },
+                    font: { size: 14 }
+                },
+                scene: {
+                    xaxis: { title: 'Red (0-255)' },
+                    yaxis: { title: 'Green (0-255)' },
+                    zaxis: { title: 'Blue (0-255)' },
+                    aspectmode: 'cube'
+                },
+                height: 400,
+                autosize: true,
+                margin: { l: 0, r: 0, t: 64, b: 0 },
+                legend: {
+                    x: 0,
+                    y: 1
+                }
+            };
+
+            if (!window.Plotly) { document.getElementById('plot3d').textContent='3D 图表加载失败，请刷新重试。'; return; }
+            Plotly.newPlot('plot3d', [extractedTrace, matchedTrace, ...connectionTraces], layout, {
+                responsive: true, displaylogo: false
+            });
+        }

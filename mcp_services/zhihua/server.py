@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import base64
 import csv
+import hashlib
 import json
 import math
 import mimetypes
 import os
 import re
 import threading
-from collections import Counter
+from collections import Counter, OrderedDict
 from io import BytesIO
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -28,12 +29,14 @@ from PIL import Image, ImageOps
 
 
 HOST = os.getenv("ZHIHUA_GATEWAY_HOST", "127.0.0.1")
-PORT = int(os.getenv("ZHIHUA_GATEWAY_PORT", "8006"))
+PORT = 8000
 BACKEND = os.getenv("ZHIHUA_BACKEND", "local").strip().lower()
 BASE_URL = os.getenv("ZHIHUA_BASE_URL", "").rstrip("/")
 API_KEY = os.getenv("ZHIHUA_API_KEY", "")
 REMOTE_MODEL = os.getenv("ZHIHUA_MODEL", "zjuqx/ZhiHua")
-MAX_TOKENS = int(os.getenv("ZHIHUA_MAX_TOKENS", "700"))
+MAX_TOKENS = int(os.getenv("ZHIHUA_MAX_TOKENS", "512"))
+FOLLOWUP_MAX_TOKENS = int(os.getenv("ZHIHUA_FOLLOWUP_MAX_TOKENS", "512"))
+CONTINUATION_MAX_TOKENS = int(os.getenv("ZHIHUA_CONTINUATION_MAX_TOKENS", "192"))
 MAX_IMAGE_BYTES = int(os.getenv("ZHIHUA_MAX_IMAGE_BYTES", str(15 * 1024 * 1024)))
 RAG_TOP_K = max(1, int(os.getenv("ZHIHUA_RAG_TOP_K", "3")))
 USE_KNOWLEDGE_BASE = os.getenv("ZHIHUA_USE_KB", "0").strip().lower() in {
@@ -82,6 +85,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 _model = None
 _processor = None
 _model_device = "unloaded"
+_model_quantization = "none"
 _load_lock = threading.Lock()
 _inference_lock = threading.Lock()
 _kb_lock = threading.Lock()
@@ -90,13 +94,37 @@ _kb_vectors: list[Counter[str]] = []
 _kb_idf: dict[str, float] = {}
 _glossary: list[dict[str, object]] = []
 _traditional_color_names: list[str] = []
+_analysis_cache: OrderedDict[str, dict[str, object]] = OrderedDict()
+_analysis_cache_lock = threading.Lock()
+ANALYSIS_CACHE_SIZE = max(1, int(os.getenv("ZHIHUA_ANALYSIS_CACHE_SIZE", "8")))
 
 COLOR_DEPENDENT_TERMS = {"青绿设色", "浅绛设色", "小青绿"}
+TERM_FALLBACKS = {
+    "工笔": "细密刻画倾向",
+    "写意": "概括表现倾向",
+    "白描": "线性勾勒倾向",
+    "泼墨": "大面积墨色铺陈倾向",
+    "没骨": "弱化轮廓线的表现倾向",
+}
+INCOMPLETE_CONNECTOR_PATTERN = re.compile(
+    r"(?:因此|所以|此外|由此可见|由此|同时|总体而言|总的来说|综上)[，。！？；：、\s]*$"
+)
+ORPHAN_CONNECTOR_PATTERN = re.compile(
+    r"(^|[。！？\n])(?:因此|所以|此外|由此可见|由此|同时|总体而言|总的来说|综上)[，。！？；：、\s]+"
+)
 GENERIC_COLOR_PATTERN = re.compile(
     r"(?:(?:浅|深|淡|浓|亮|暗|粉|米|乳|银|金|土|砖|赭|朱|绛|靛|翠|藏|天|湖|宝石|橘|橙|紫|青|蓝|红|黄|绿|黑|白|灰|褐|棕){1,4}色"
     r"|墨色|色调|用色|青绿|蓝绿|黑白"
     r"|(?:红|橙|黄|绿|青|蓝|紫|黑|白|灰|褐|棕|金|银)(?=[、，。！？；和与相间]))"
 )
+COLOR_QUESTION_PATTERN = re.compile(
+    r"颜色|色彩|设色|着色|用色|配色|色调|色相|色温|冷暖|墨色|水墨|青绿|浅绛|综合色"
+)
+
+
+def question_mentions_color(text: str) -> bool:
+    """Only expose recognized colors when the user's current task asks for them."""
+    return bool(COLOR_QUESTION_PATTERN.search(text or ""))
 
 
 def endpoint_url() -> str:
@@ -433,6 +461,7 @@ def enforce_color_vocabulary(
     filtered = re.sub(r"([。！？])[，；]+", r"\1", filtered)
     filtered = re.sub(r"([。！？])(?:[。！？])+", r"\1", filtered)
     filtered = re.sub(r"^[，。！？；\s]+", "", filtered).strip()
+    filtered = remove_orphan_connectors(filtered)
     if not filtered:
         filtered = "画面特征仅凭当前图片谨慎判断；具体色名以上方识别结果为准。"
     if allowed_colors:
@@ -478,15 +507,13 @@ def normalize_terminology(
         and not entry.get("preserve_as_natural_language", False)
     ]
     if rejected_terms:
-        parts = re.split(r"([，。！？；\n])", analysis)
-        analysis = "".join(
-            part for part in parts
-            if part in "，。！？；\n"
-            or not any(term in part for term in rejected_terms)
-        )
+        for term in sorted(rejected_terms, key=len, reverse=True):
+            replacement = TERM_FALLBACKS.get(term, "相应的视觉表现倾向")
+            analysis = analysis.replace(term, replacement)
         analysis = re.sub(r"^[，。！？；\s]+", "", analysis)
         analysis = re.sub(r"([，；])([。！？])", r"\2", analysis)
         analysis = re.sub(r"[，；]{2,}", "，", analysis).strip()
+        analysis = remove_orphan_connectors(analysis)
     if not matches:
         return analysis, [], rejected_terms
     lines = ["\n\n术语规范化（仅依据上文已经描述的可见特征）："]
@@ -499,7 +526,7 @@ def normalize_terminology(
 
 
 def load_local_model():
-    global _model, _processor, _model_device
+    global _model, _processor, _model_device, _model_quantization
     if _model is not None:
         return _model, _processor
     with _load_lock:
@@ -508,20 +535,31 @@ def load_local_model():
         if not MODEL_PATH.is_dir():
             raise FileNotFoundError(f"模型目录不存在：{MODEL_PATH}")
         import torch
-        from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+        from transformers import AutoProcessor, BitsAndBytesConfig, Qwen2_5_VLForConditionalGeneration
 
         OFFLOAD_PATH.mkdir(parents=True, exist_ok=True)
         kwargs = {"dtype": torch.bfloat16, "low_cpu_mem_usage": True}
         if torch.cuda.is_available():
-            kwargs.update({
-                "device_map": "auto",
-                "max_memory": {0: "6GiB", "cpu": "24GiB"},
-                "offload_folder": str(OFFLOAD_PATH),
-            })
+            use_4bit = os.getenv("ZHIHUA_LOAD_IN_4BIT", "1").strip().lower() in {
+                "1", "true", "yes", "on"
+            }
+            kwargs.update({"device_map": "auto", "max_memory": {0: "7GiB", "cpu": "16GiB"}})
+            if use_4bit:
+                kwargs["quantization_config"] = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_compute_dtype=torch.bfloat16,
+                )
+                _model_quantization = "bitsandbytes-nf4"
+            else:
+                kwargs["offload_folder"] = str(OFFLOAD_PATH)
+                _model_quantization = "bfloat16"
             _model_device = torch.cuda.get_device_name(0)
         else:
             kwargs["device_map"] = {"": "cpu"}
             _model_device = "cpu"
+            _model_quantization = "bfloat16"
         _processor = AutoProcessor.from_pretrained(str(MODEL_PATH), local_files_only=True)
         _model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             str(MODEL_PATH), local_files_only=True, **kwargs
@@ -530,27 +568,80 @@ def load_local_model():
         return _model, _processor
 
 
-def local_inference(image: Image.Image, prompt: str) -> str:
+def local_inference(
+    image: Image.Image | None, prompt: str, max_tokens: int | None = None,
+) -> tuple[str, bool]:
     import torch
 
     model, processor = load_local_model()
-    messages = [{"role": "user", "content": [
-        {"type": "image", "image": image},
-        {"type": "text", "text": prompt},
-    ]}]
+    content = [{"type": "text", "text": prompt}]
+    if image is not None:
+        content.insert(0, {"type": "image", "image": image})
+    messages = [{"role": "user", "content": content}]
     text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    inputs = processor(text=[text], images=[image], padding=True, return_tensors="pt")
+    processor_kwargs = {"text": [text], "padding": True, "return_tensors": "pt"}
+    if image is not None:
+        processor_kwargs["images"] = [image]
+    inputs = processor(**processor_kwargs)
     input_device = next(parameter.device for parameter in model.parameters()
                         if parameter.device.type != "meta")
     inputs = inputs.to(input_device)
+    token_limit = max_tokens or MAX_TOKENS
     with torch.inference_mode():
         generated_ids = model.generate(
-            **inputs, max_new_tokens=MAX_TOKENS, do_sample=False, use_cache=True
+            **inputs, max_new_tokens=token_limit, do_sample=False, use_cache=True
         )
     trimmed = [output[len(source):] for source, output in zip(inputs.input_ids, generated_ids)]
-    return processor.batch_decode(
+    result = processor.batch_decode(
         trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
     )[0].strip()
+    generated_token_count = max((len(output) for output in trimmed), default=0)
+    return result, generated_token_count >= token_limit
+
+
+def merge_continuation(partial: str, continuation: str) -> str:
+    partial = partial.rstrip()
+    continuation = continuation.strip()
+    if not continuation:
+        return partial
+    try:
+        candidate = json.loads(continuation)
+        if isinstance(candidate, dict) and isinstance(candidate.get("analysis"), str):
+            return continuation
+    except json.JSONDecodeError:
+        pass
+    max_overlap = min(len(partial), len(continuation), 240)
+    for size in range(max_overlap, 7, -1):
+        if partial[-size:] == continuation[:size]:
+            return partial + continuation[size:]
+    return partial + continuation
+
+
+def continuation_prompt(original_prompt: str, partial: str) -> str:
+    return f"""请继续完成下面被长度上限截断的回答。只从中断处继续，不重复已有内容；补全当前句子并自然收束。继续遵守原任务中的事实边界和术语约束。
+
+原任务：
+{original_prompt}
+
+已经生成的内容：
+{partial}
+
+只输出需要接在后面的文字。"""
+
+
+def needs_completion(text: str) -> bool:
+    return bool(INCOMPLETE_CONNECTOR_PATTERN.search(text or ""))
+
+
+def remove_incomplete_ending(text: str) -> str:
+    cleaned = INCOMPLETE_CONNECTOR_PATTERN.sub("", text or "").rstrip("，；：、 \n")
+    if cleaned and cleaned[-1] not in "。！？":
+        cleaned += "。"
+    return cleaned
+
+
+def remove_orphan_connectors(text: str) -> str:
+    return ORPHAN_CONNECTOR_PATTERN.sub(r"\1", text or "").strip()
 
 
 def remote_inference(image_bytes: bytes, mime_type: str, prompt: str) -> tuple[str, str, object]:
@@ -577,6 +668,59 @@ def remote_inference(image_bytes: bytes, mime_type: str, prompt: str) -> tuple[s
         result = json.loads(response.read().decode("utf-8"))
     content = result["choices"][0]["message"]["content"]
     return extract_text(content), result.get("model", REMOTE_MODEL), result.get("usage")
+
+
+def get_cached_analysis(analysis_id: str) -> dict[str, object] | None:
+    if not analysis_id:
+        return None
+    with _analysis_cache_lock:
+        cached = _analysis_cache.get(analysis_id)
+        if cached is not None:
+            _analysis_cache.move_to_end(analysis_id)
+        return cached
+
+
+def store_cached_analysis(analysis_id: str, payload: dict[str, object]) -> None:
+    with _analysis_cache_lock:
+        _analysis_cache[analysis_id] = payload
+        _analysis_cache.move_to_end(analysis_id)
+        while len(_analysis_cache) > ANALYSIS_CACHE_SIZE:
+            _analysis_cache.popitem(last=False)
+
+
+def build_followup_prompt(
+    user_prompt: str,
+    cached: dict[str, object],
+    ocr_text: str,
+    allowed_colors: list[str],
+) -> str:
+    history = cached.get("history") or []
+    history_text = "\n".join(
+        f"用户：{item.get('question', '')}\n回答：{item.get('answer', '')}"
+        for item in history[-4:]
+        if isinstance(item, dict)
+    )
+    return f"""你正在继续回答同一幅中国画的问题。不得重新读取图片；只能使用以下已完成结果和术语库约束。
+
+已有画面赏析：
+{cached.get('analysis', '')}
+
+已有五类技法相对倾向：
+{json.dumps(cached.get('techniques') or {}, ensure_ascii=False)}
+
+已有 OCR 文本（可能含误识别，必须保守表述）：
+{ocr_text or cached.get('ocr_text', '') or '无'}
+
+已有传统色名称：
+{'、'.join(allowed_colors) or '本次问题不涉及颜色，不提供颜色信息'}
+
+此前追问记录：
+{history_text or '无'}
+
+本次问题：{user_prompt}
+
+请直接给出本次问题的赏析正文；不要声称重新观察了图片，不要重复生成完整的五类评分。
+如果用户询问技法，可以直接引用“已有五类技法相对倾向”中的分数与画面依据进行解释；不得重新读取图片或改写这些缓存结果。"""
 
 
 @app.get("/api/health")
@@ -608,6 +752,8 @@ def health():
         "model": REMOTE_MODEL if BACKEND == "remote" else str(MODEL_PATH),
         "model_loaded": _model is not None,
         "device": _model_device,
+        "quantization": _model_quantization,
+        "analysis_cache_entries": len(_analysis_cache),
         "knowledge_enabled": USE_KNOWLEDGE_BASE,
         "knowledge_base": str(KB_PATH),
         "knowledge_entries": len(_kb_rows),
@@ -623,42 +769,84 @@ def health():
 
 @app.post("/api/appreciate")
 def appreciate():
+    requested_analysis_id = (request.form.get("analysis_id") or "").strip()
+    cached = get_cached_analysis(requested_analysis_id)
     uploaded = request.files.get("image")
-    if uploaded is None or not uploaded.filename:
-        return jsonify({"error": "请上传画作图片"}), 400
-    image_bytes = uploaded.read(MAX_IMAGE_BYTES + 1)
-    if not image_bytes:
-        return jsonify({"error": "图片内容为空"}), 400
-    if len(image_bytes) > MAX_IMAGE_BYTES:
-        return jsonify({"error": "图片超过服务允许的大小"}), 413
-    mime_type = uploaded.mimetype or ""
-    if not mime_type.startswith("image/"):
-        mime_type = mimetypes.guess_type(uploaded.filename)[0] or ""
-    if not mime_type.startswith("image/"):
-        return jsonify({"error": "文件不是受支持的图片"}), 400
-    user_prompt = (request.form.get("prompt") or DEFAULT_PROMPT).strip()
+    image_bytes = b""
+    image = None
+    mime_type = ""
+    if cached is None:
+        if uploaded is None or not uploaded.filename:
+            return jsonify({"error": "首次分析必须上传画作图片；后续提问请提供 analysis_id"}), 400
+        image_bytes = uploaded.read(MAX_IMAGE_BYTES + 1)
+        if not image_bytes:
+            return jsonify({"error": "图片内容为空"}), 400
+        if len(image_bytes) > MAX_IMAGE_BYTES:
+            return jsonify({"error": "图片超过服务允许的大小"}), 413
+        mime_type = uploaded.mimetype or ""
+        if not mime_type.startswith("image/"):
+            mime_type = mimetypes.guess_type(uploaded.filename)[0] or ""
+        if not mime_type.startswith("image/"):
+            return jsonify({"error": "文件不是受支持的图片"}), 400
+    raw_user_prompt = (request.form.get("prompt") or "").strip()
+    user_prompt = raw_user_prompt or DEFAULT_PROMPT
     if len(user_prompt) > 2000:
         return jsonify({"error": "问题过长，请控制在 2000 字以内"}), 400
+    ocr_text = (request.form.get("ocr_text") or "").strip()[:4000]
     try:
-        allowed_colors = parse_allowed_colors(request.form.get("allowed_colors"))
+        supplied_colors = parse_allowed_colors(request.form.get("allowed_colors"))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    color_requested = question_mentions_color(user_prompt)
+    allowed_colors = supplied_colors if color_requested else []
 
     try:
-        image = ImageOps.exif_transpose(Image.open(BytesIO(image_bytes))).convert("RGB")
-        image.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
+        if cached is None:
+            image = ImageOps.exif_transpose(Image.open(BytesIO(image_bytes))).convert("RGB")
+            image.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
         references = retrieve_knowledge(user_prompt) if USE_KNOWLEDGE_BASE else []
-        model_prompt = (
-            build_grounded_prompt(user_prompt, references, allowed_colors)
-            if USE_KNOWLEDGE_BASE else build_direct_prompt(user_prompt, allowed_colors)
-        )
+        if cached is not None:
+            model_prompt = build_followup_prompt(
+                user_prompt, cached, ocr_text, allowed_colors
+            )
+        else:
+            model_prompt = (
+                build_grounded_prompt(user_prompt, references, allowed_colors)
+                if USE_KNOWLEDGE_BASE else build_direct_prompt(user_prompt, allowed_colors)
+            )
+            if ocr_text:
+                model_prompt += f"\n\nOCR 已识别文本（可能含误识别，仅作辅助）：{ocr_text}"
+        generation_truncated = False
+        continuation_attempted = False
         with _inference_lock:
             if BACKEND == "remote":
+                if cached is not None:
+                    return jsonify({"error": "远程后端暂不支持无图缓存追问"}), 400
                 raw_output, model_name, usage = remote_inference(
                     image_bytes, mime_type, model_prompt
                 )
             else:
-                raw_output = local_inference(image, model_prompt)
+                inference_result = local_inference(
+                    image, model_prompt,
+                    FOLLOWUP_MAX_TOKENS if cached is not None else MAX_TOKENS,
+                )
+                if isinstance(inference_result, tuple):
+                    raw_output, generation_truncated = inference_result
+                else:
+                    raw_output, generation_truncated = inference_result, False
+                if generation_truncated:
+                    continuation_attempted = True
+                    continuation_result = local_inference(
+                        image,
+                        continuation_prompt(model_prompt, raw_output),
+                        CONTINUATION_MAX_TOKENS,
+                    )
+                    if isinstance(continuation_result, tuple):
+                        continuation, continuation_truncated = continuation_result
+                    else:
+                        continuation, continuation_truncated = continuation_result, False
+                    raw_output = merge_continuation(raw_output, continuation)
+                    generation_truncated = generation_truncated or continuation_truncated
                 model_name = MODEL_PATH.name
                 usage = None
     except FileNotFoundError as exc:
@@ -677,12 +865,69 @@ def appreciate():
     analysis, techniques = parse_model_response(raw_output)
     if not analysis:
         return jsonify({"error": "模型返回的赏析正文为空"}), 502
+    if cached is not None and isinstance(cached.get("techniques"), dict):
+        techniques = cached["techniques"]
     analysis, removed_color_claims = enforce_color_vocabulary(analysis, allowed_colors)
+    incomplete_repaired = False
+    if needs_completion(analysis):
+        if BACKEND == "local":
+            continuation_attempted = True
+            with _inference_lock:
+                completion_result = local_inference(
+                    image,
+                    continuation_prompt(model_prompt, analysis),
+                    CONTINUATION_MAX_TOKENS,
+                )
+            if isinstance(completion_result, tuple):
+                completion_text, completion_truncated = completion_result
+            else:
+                completion_text, completion_truncated = completion_result, False
+            generation_truncated = generation_truncated or completion_truncated
+            completion_analysis, _ = parse_model_response(completion_text)
+            if completion_analysis:
+                combined = merge_continuation(analysis, completion_analysis)
+                analysis, extra_removed_claims = enforce_color_vocabulary(
+                    combined, allowed_colors
+                )
+                removed_color_claims.extend(extra_removed_claims)
+        if needs_completion(analysis):
+            analysis = remove_incomplete_ending(analysis)
+        incomplete_repaired = True
     analysis, terminology_matches, rejected_terms = normalize_terminology(
         analysis, excluded_terms=COLOR_DEPENDENT_TERMS
     )
+    if needs_completion(analysis):
+        analysis = remove_incomplete_ending(analysis)
+        incomplete_repaired = True
+    if cached is None:
+        analysis_id = hashlib.sha256(image_bytes).hexdigest()[:24]
+        store_cached_analysis(analysis_id, {
+            "analysis": analysis,
+            "techniques": techniques,
+            "ocr_text": ocr_text,
+            "recognized_colors": supplied_colors,
+            "history": [],
+        })
+        reused_analysis = False
+    else:
+        analysis_id = requested_analysis_id
+        history = cached.setdefault("history", [])
+        if isinstance(history, list):
+            history.append({"question": user_prompt, "answer": analysis})
+            del history[:-6]
+        if ocr_text:
+            cached["ocr_text"] = ocr_text
+        if supplied_colors:
+            cached["recognized_colors"] = supplied_colors
+        store_cached_analysis(analysis_id, cached)
+        reused_analysis = True
     return jsonify({
         "analysis": analysis,
+        "analysis_id": analysis_id,
+        "reused_analysis": reused_analysis,
+        "truncated": generation_truncated,
+        "continuation_attempted": continuation_attempted,
+        "incomplete_repaired": incomplete_repaired,
         "model": model_name,
         "backend": BACKEND,
         "usage": usage,
@@ -701,6 +946,7 @@ def appreciate():
             "rejected_terms": rejected_terms,
         },
         "colors": {
+            "requested": color_requested,
             "required_format": "推测为XX色",
             "allowed_names": allowed_colors,
             "allowed_phrases": [format_color_phrase(name) for name in allowed_colors],

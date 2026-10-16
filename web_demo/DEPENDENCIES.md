@@ -1,9 +1,11 @@
 # 网页依赖
 
-`index.html` 是单文件网页，但引用了以下外部资源：
+当前网页不依赖 CDN：
 
-- Three.js r128：用于页面中的三维相关能力
-- Plotly.js 2.26.0：用于 3D 颜色空间图
-- Google Fonts：用于中文字体
+- Plotly.js 2.26.0：`vendor/plotly.min.js`，用于三维颜色空间。
+- 江城黑体 400/500/700：`assets/jiangcheng-*.ttf`。
+- 图片、SVG 和示例古画：`assets/`。
 
-因此，双击网页可以打开基础界面，但要完整显示 3D 图表和字体，需要联网。后续如果申请要求完全离线运行，再单独处理依赖本地化问题。
+题跋 OCR 和 Qwen 赏析必须通过项目根目录启动器打开 `http://127.0.0.1:8000/web_demo/index.html`。直接双击 `index.html` 只能使用不需要后端的部分界面能力。
+
+依赖许可和来源见项目根目录 `THIRD_PARTY_NOTICES.md`。

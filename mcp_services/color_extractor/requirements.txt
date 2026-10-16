@@ -1,5 +1,0 @@
-fastmcp>=1.2.0
-opencv-python
-numpy
-scikit-learn
-requests

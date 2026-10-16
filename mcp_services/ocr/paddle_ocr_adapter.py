@@ -16,15 +16,19 @@ import json
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
+
+from PIL import Image
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TEXT_RECOGNITION_MODEL = "PP-OCRv5_server_rec"
 DEFAULT_TEXT_DETECTION_MODEL = "PP-OCRv6_medium_det"
 DEFAULT_TEXTLINE_ORIENTATION_MODEL = "PP-LCNet_x1_0_textline_ori"
-DEFAULT_TEXT_RECOGNITION_MODEL_DIR = (
+DEFAULT_TEXT_RECOGNITION_MODEL_DIR = None
+DEFAULT_FALLBACK_RECOGNITION_MODEL_DIR = (
     PROJECT_ROOT / ".models" / "PP-OCRv5_server_rec_hcsu_stage1"
 )
 DEFAULT_TEXT_DETECTION_MODEL_DIR = (
@@ -33,6 +37,11 @@ DEFAULT_TEXT_DETECTION_MODEL_DIR = (
 DEFAULT_TEXTLINE_ORIENTATION_MODEL_DIR = (
     PROJECT_ROOT / ".models" / "PP-LCNet_x1_0_textline_ori"
 )
+
+
+def _absolute_without_resolving_links(path: str | Path) -> Path:
+    """Return an absolute path while preserving Windows junction aliases."""
+    return Path(os.path.abspath(os.fspath(path)))
 
 
 def _preload_torch_windows_dependencies() -> None:
@@ -146,11 +155,14 @@ class AncientPaintingOCR:
         self,
         text_recognition_model_name: str = DEFAULT_TEXT_RECOGNITION_MODEL,
         text_recognition_model_dir: str | Path | None = DEFAULT_TEXT_RECOGNITION_MODEL_DIR,
+        fallback_recognition_model_name: str = DEFAULT_TEXT_RECOGNITION_MODEL,
+        fallback_recognition_model_dir: str | Path | None = DEFAULT_FALLBACK_RECOGNITION_MODEL_DIR,
         text_detection_model_name: str = DEFAULT_TEXT_DETECTION_MODEL,
         text_detection_model_dir: str | Path | None = DEFAULT_TEXT_DETECTION_MODEL_DIR,
         textline_orientation_model_name: str = DEFAULT_TEXTLINE_ORIENTATION_MODEL,
         textline_orientation_model_dir: str | Path | None = DEFAULT_TEXTLINE_ORIENTATION_MODEL_DIR,
-        min_confidence: float = 0.60,
+        min_confidence: float = 0.30,
+        fallback_trigger_confidence: float = 0.60,
     ):
         _preload_torch_windows_dependencies()
         try:
@@ -161,23 +173,33 @@ class AncientPaintingOCR:
             ) from exc
 
         self.min_confidence = min_confidence
+        self.fallback_trigger_confidence = fallback_trigger_confidence
         self.text_recognition_model_name = text_recognition_model_name
+        self.fallback_recognition_model_name = fallback_recognition_model_name
         self.text_detection_model_name = text_detection_model_name
         self.textline_orientation_model_name = textline_orientation_model_name
         self.text_recognition_model_dir = (
-            Path(text_recognition_model_dir).resolve()
+            _absolute_without_resolving_links(text_recognition_model_dir)
             if text_recognition_model_dir
             else None
         )
+        self.fallback_recognition_model_dir = (
+            _absolute_without_resolving_links(fallback_recognition_model_dir)
+            if fallback_recognition_model_dir
+            else None
+        )
         self.text_detection_model_dir = (
-            Path(text_detection_model_dir).resolve() if text_detection_model_dir else None
+            _absolute_without_resolving_links(text_detection_model_dir)
+            if text_detection_model_dir
+            else None
         )
         self.textline_orientation_model_dir = (
-            Path(textline_orientation_model_dir).resolve()
+            _absolute_without_resolving_links(textline_orientation_model_dir)
             if textline_orientation_model_dir else None
         )
         for label, path in (
-            ("微调识别模型", self.text_recognition_model_dir),
+            ("主识别模型", self.text_recognition_model_dir),
+            ("HCSU 单字备用模型", self.fallback_recognition_model_dir),
             ("文字检测模型", self.text_detection_model_dir),
             ("文字方向模型", self.textline_orientation_model_dir),
         ):
@@ -195,6 +217,12 @@ class AncientPaintingOCR:
             # 关闭它仍使用同一 OCR 模型，但走稳定的 CPU 推理路径。
             "enable_mkldnn": False,
         }
+        try:
+            import paddle
+            self.device = "gpu:0" if paddle.device.is_compiled_with_cuda() else "cpu"
+        except Exception:
+            self.device = "cpu"
+        options["device"] = self.device
         if self.text_recognition_model_dir:
             options["text_recognition_model_dir"] = str(self.text_recognition_model_dir)
         if self.text_detection_model_dir:
@@ -208,6 +236,85 @@ class AncientPaintingOCR:
                 "当前 PaddleOCR 不支持显式指定文字识别模型；请安装项目要求的 "
                 "PaddleOCR 3.x。"
             ) from exc
+        self._fallback_engine = None
+
+    def _get_fallback_engine(self):
+        """Lazily load the HCSU recognizer without replacing the line recognizer."""
+        if self._fallback_engine is not None:
+            return self._fallback_engine
+        if self.fallback_recognition_model_dir is None:
+            return None
+        from paddleocr import TextRecognition
+
+        self._fallback_engine = TextRecognition(
+            model_name=self.fallback_recognition_model_name,
+            model_dir=str(self.fallback_recognition_model_dir),
+            device=self.device,
+            enable_mkldnn=False,
+        )
+        return self._fallback_engine
+
+    def _fallback_single_character(
+        self, image: str, item: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Recheck one low-confidence Han character with the HCSU model."""
+        text = item.get("text", "")
+        if (
+            len(text) != 1
+            or not re.fullmatch(r"[\u3400-\u9fff]", text)
+            or float(item.get("confidence", 0)) >= self.fallback_trigger_confidence
+        ):
+            item["recognizer"] = "official"
+            return item
+        try:
+            engine = self._get_fallback_engine()
+        except Exception as exc:
+            item["recognizer"] = "official"
+            item["fallback_error"] = str(exc)
+            return item
+        if engine is None:
+            item["recognizer"] = "official"
+            return item
+
+        bbox = item["bbox"]
+        with Image.open(image) as source:
+            width, height = source.size
+            x1 = max(0, int(bbox[0]))
+            y1 = max(0, int(bbox[1]))
+            x2 = min(width, max(x1 + 1, int(bbox[2] + 0.999)))
+            y2 = min(height, max(y1 + 1, int(bbox[3] + 0.999)))
+            crop = source.crop((x1, y1, x2, y2)).convert("RGB")
+            descriptor, temp_name = tempfile.mkstemp(suffix=".png")
+            os.close(descriptor)
+            crop_path = Path(temp_name)
+            crop.save(crop_path, format="PNG")
+        try:
+            try:
+                predictions = engine.predict(str(crop_path)) or []
+            except Exception as exc:
+                item["recognizer"] = "official"
+                item["fallback_error"] = str(exc)
+                return item
+            best_text = ""
+            best_score = 0.0
+            for prediction in predictions:
+                candidate = _clean_text(_result_value(prediction, "rec_text", ""))
+                score = float(_result_value(prediction, "rec_score", 0.0) or 0.0)
+                if re.fullmatch(r"[\u3400-\u9fff]", candidate) and score > best_score:
+                    best_text, best_score = candidate, score
+            item["primary_text"] = text
+            item["primary_confidence"] = float(item.get("confidence", 0))
+            item["fallback_text"] = best_text
+            item["fallback_confidence"] = best_score
+            if best_text and best_score > item["primary_confidence"]:
+                item["text"] = best_text
+                item["confidence"] = best_score
+                item["recognizer"] = "hcsu_single_character_fallback"
+            else:
+                item["recognizer"] = "official"
+            return item
+        finally:
+            crop_path.unlink(missing_ok=True)
 
     def recognize(self, image: str | Path) -> list[dict[str, Any]]:
         image = str(image)
@@ -223,7 +330,8 @@ class AncientPaintingOCR:
             raw = self.engine.ocr(image, cls=True)
             items = _parse_old_result(raw[0] if raw and isinstance(raw[0], list) else raw)
 
-        return [item for item in items if item["confidence"] >= self.min_confidence]
+        reviewed = [self._fallback_single_character(image, item) for item in items]
+        return [item for item in reviewed if item["confidence"] >= self.min_confidence]
 
 
 def recognize_file(image: str | Path, output: str | Path | None = None, **kwargs: Any) -> list[dict[str, Any]]:
@@ -244,16 +352,22 @@ def main() -> None:
     )
     parser.add_argument(
         "--rec-model-dir",
-        default=str(DEFAULT_TEXT_RECOGNITION_MODEL_DIR),
-        help="本地微调识别模型目录",
+        default=None,
+        help="官方主识别模型目录；留空时由 PaddleOCR 管理官方权重",
     )
-    parser.add_argument("--min-confidence", type=float, default=0.60)
+    parser.add_argument(
+        "--fallback-rec-model-dir",
+        default=str(DEFAULT_FALLBACK_RECOGNITION_MODEL_DIR),
+        help="HCSU 低置信度单字备用模型目录",
+    )
+    parser.add_argument("--min-confidence", type=float, default=0.30)
     args = parser.parse_args()
     results = recognize_file(
         args.image,
         args.output,
         text_recognition_model_name=args.rec_model,
         text_recognition_model_dir=args.rec_model_dir,
+        fallback_recognition_model_dir=args.fallback_rec_model_dir,
         min_confidence=args.min_confidence,
     )
     if not args.output:

@@ -24,13 +24,23 @@ from statistics import median
 ROOT = Path(__file__).resolve().parent
 HOST = "127.0.0.1"
 WEB_PORT = 8000
-OCR_PORT = 8004
-DETECTOR_PORT = 8005
-ZHIHUA_PORT = 8006
 VENV_DIR = ROOT / ".venv"
 VENV_PYTHON = VENV_DIR / "Scripts" / "python.exe"
 REQUIREMENTS = ROOT / "requirements-local.txt"
 INSTALL_MARKER = VENV_DIR / ".installed-requirements.sha256"
+CUDA_TORCH_VERSION = os.getenv("ZHIHUA_TORCH_VERSION", "2.14.1")
+CUDA_TORCHVISION_VERSION = os.getenv("ZHIHUA_TORCHVISION_VERSION", "0.29.1")
+PADDLE_VERSION = os.getenv("ZHIHUA_PADDLE_VERSION", "3.3.1")
+PADDLE_CUDA_INDEX = os.getenv(
+    "ZHIHUA_PADDLE_INDEX", "https://www.paddlepaddle.org.cn/packages/stable/cu126/"
+)
+CUDA_TORCH_INDEXES = (
+    os.getenv("ZHIHUA_TORCH_INDEX", "https://download.pytorch.org/whl/cu126"),
+    "https://download.pytorch.org/whl/cu124",
+)
+# CUDA wheels are large (2.6GB+).  Never download them during normal startup;
+# users can opt in explicitly for a one-time installation.
+AUTO_CUDA_INSTALL = os.getenv("ZHIHUA_AUTO_CUDA_INSTALL", "0").strip().lower() in {"1", "true", "yes", "on"}
 MODEL_DIR = ROOT / ".models" / "Qwen2.5-VL-3B-Instruct"
 OCR_MODEL_DIR = ROOT / ".models" / "PP-OCRv5_server_rec_hcsu_stage1"
 OCR_MODEL_ASSET = "PP-OCRv5_server_rec_hcsu_stage1.zip"
@@ -100,6 +110,171 @@ def open_browser(url: str) -> None:
 
 def requirements_hash() -> str:
     return hashlib.sha256(REQUIREMENTS.read_bytes()).hexdigest()
+
+
+def nvidia_gpu_present() -> bool:
+    command = shutil.which("nvidia-smi")
+    if not command:
+        return False
+    try:
+        result = subprocess.run(
+            [command, "-L"], capture_output=True, text=True,
+            timeout=10, check=False,
+        )
+        return result.returncode == 0 and "GPU" in result.stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def cuda_torch_available() -> bool:
+    if not VENV_PYTHON.is_file():
+        return False
+    result = subprocess.run(
+        [str(VENV_PYTHON), "-c", "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)"],
+        capture_output=True, text=True, timeout=30, check=False,
+    )
+    return result.returncode == 0
+
+
+def ensure_cuda_torch() -> None:
+    """Install a CUDA-enabled PyTorch wheel when a local NVIDIA GPU exists.
+
+    The application remains fully local: this only changes the PyTorch wheel
+    used by the local Qwen process. Machines without NVIDIA hardware keep the
+    CPU installation and do not enter this branch.
+    """
+    if not nvidia_gpu_present():
+        print("[硬件] 未检测到 NVIDIA GPU，使用 CPU 模式。")
+        return
+    if cuda_torch_available():
+        print("[硬件] 已检测到 CUDA 版 PyTorch，使用本地 NVIDIA GPU。")
+        return
+
+    if not AUTO_CUDA_INSTALL:
+        print("[硬件] 检测到 NVIDIA GPU，但当前 PyTorch 仍为 CPU 版；跳过自动下载 CUDA（启动保持快速）。")
+        print("[硬件] 如需一次性安装，请设置 ZHIHUA_AUTO_CUDA_INSTALL=1 后单独运行启动器。")
+        return
+
+    print("[硬件] 检测到 NVIDIA GPU，正在安装 CUDA 版 PyTorch（仍为本地推理，不调用 API）……", flush=True)
+    local_wheels = sorted(ROOT.glob(f"torch-{CUDA_TORCH_VERSION}+cu*-cp312-cp312-win_amd64.whl"))
+    if local_wheels:
+        print(f"[硬件] 使用已下载的 CUDA PyTorch：{local_wheels[-1].name}", flush=True)
+        subprocess.run(
+            [str(VENV_PYTHON), "-m", "pip", "install", "--disable-pip-version-check",
+             "--upgrade", "--force-reinstall", "--no-deps", str(local_wheels[-1])],
+            cwd=ROOT, check=True,
+        )
+    specs = [f"torch=={CUDA_TORCH_VERSION}", f"torchvision=={CUDA_TORCHVISION_VERSION}"]
+    for index in CUDA_TORCH_INDEXES:
+        try:
+            install_specs = specs if not local_wheels else [f"torchvision=={CUDA_TORCHVISION_VERSION}"]
+            subprocess.run([
+                str(VENV_PYTHON), "-m", "pip", "install", "--disable-pip-version-check",
+                "--upgrade", "--force-reinstall", "--no-deps", "--index-url", index,
+                *install_specs,
+            ], cwd=ROOT, check=True)
+            if cuda_torch_available():
+                print(f"[硬件] CUDA 版 PyTorch 已就绪：{index}")
+                return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            print(f"[硬件] CUDA 软件源不可用：{index}")
+    print("[警告] CUDA 版 PyTorch 安装失败，将继续使用 CPU 模式。", flush=True)
+
+
+def paddle_status() -> tuple[bool, bool]:
+    """Return (installed, CUDA-enabled) for the active project environment."""
+    if not VENV_PYTHON.is_file():
+        return False, False
+    result = subprocess.run([
+        str(VENV_PYTHON), "-c",
+        "import paddle; print('1' if paddle.device.is_compiled_with_cuda() else '0')",
+    ], capture_output=True, text=True, timeout=30, check=False)
+    if result.returncode != 0:
+        return False, False
+    return True, result.stdout.strip().endswith("1")
+
+
+def ensure_paddle_runtime() -> None:
+    installed, gpu_enabled = paddle_status()
+    has_nvidia = nvidia_gpu_present()
+    if has_nvidia and gpu_enabled:
+        print("[硬件] GPU 版 PaddlePaddle 已就绪，OCR 使用 NVIDIA GPU。")
+        return
+    if has_nvidia and AUTO_CUDA_INSTALL:
+        print("[硬件] 正在安装 GPU 版 PaddlePaddle（CUDA 12.6）……", flush=True)
+        subprocess.run([
+            str(VENV_PYTHON), "-m", "pip", "uninstall", "-y",
+            "paddlepaddle", "paddlepaddle-gpu",
+        ], cwd=ROOT, check=False)
+        try:
+            subprocess.run([
+                str(VENV_PYTHON), "-m", "pip", "install", "--disable-pip-version-check",
+                "--timeout", "1800", f"paddlepaddle-gpu=={PADDLE_VERSION}",
+                "--index-url", PADDLE_CUDA_INDEX,
+            ], cwd=ROOT, check=True)
+        except subprocess.CalledProcessError:
+            print("[警告] GPU 版 PaddlePaddle 安装失败，将恢复 CPU 版以保证 OCR 可用。")
+        installed, gpu_enabled = paddle_status()
+        if gpu_enabled:
+            print("[硬件] GPU 版 PaddlePaddle 已就绪，OCR 使用 NVIDIA GPU。")
+            return
+    if not installed:
+        print("[依赖] 正在安装 CPU 版 PaddlePaddle 作为兼容回退……", flush=True)
+        subprocess.run([
+            str(VENV_PYTHON), "-m", "pip", "install", "--disable-pip-version-check",
+            f"paddlepaddle=={PADDLE_VERSION}",
+        ], cwd=ROOT, check=True)
+    elif has_nvidia:
+        print("[硬件] PaddleOCR 当前使用 CPU；运行“安装NVIDIA加速.bat”可切换 GPU 版。")
+
+
+def ensure_hardware_runtimes() -> None:
+    ensure_cuda_torch()
+    ensure_paddle_runtime()
+
+
+def ascii_model_alias(path: Path) -> Path:
+    """Expose a model directory through an ASCII-only Windows junction.
+
+    Paddle Inference can fail while parsing model metadata when the model path
+    contains non-ASCII characters.  Keeping the downloaded files in the
+    project is still desirable, so only the path passed to the inference
+    libraries is redirected through a stable per-project junction.
+    """
+    path = path.absolute()
+    if os.name != "nt" or str(path).isascii():
+        return path
+
+    local_app_data = Path(os.getenv("LOCALAPPDATA", ""))
+    if not str(local_app_data).isascii():
+        raise RuntimeError(
+            "当前项目和 LOCALAPPDATA 路径都包含非英文字符，无法为 PaddleOCR "
+            "创建兼容路径。请将项目解压到纯英文路径后重试。"
+        )
+    project_key = hashlib.sha256(str(ROOT).encode("utf-8")).hexdigest()[:16]
+    alias_root = local_app_data / "ArtGenome" / "model_aliases" / project_key
+    alias_root.mkdir(parents=True, exist_ok=True)
+    alias = alias_root / path.name
+    if alias.exists():
+        try:
+            if os.path.samefile(alias, path):
+                return alias
+        except OSError:
+            pass
+        raise RuntimeError(f"OCR 兼容路径已被其他文件占用：{alias}")
+
+    result = subprocess.run(
+        ["cmd.exe", "/d", "/c", "mklink", "/J", str(alias), str(path)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if result.returncode != 0 or not alias.exists():
+        details = (result.stderr or result.stdout).strip()
+        raise RuntimeError(f"无法创建 OCR 英文兼容路径：{alias}\n{details}")
+    print(f"[兼容] 模型英文路径：{alias}")
+    return alias
 
 
 def select_fastest_pip_index(timeout: float = 8.0, attempts: int = 2) -> str:
@@ -201,6 +376,7 @@ def ensure_environment() -> None:
     installed = INSTALL_MARKER.read_text(encoding="utf-8").strip() if INSTALL_MARKER.exists() else ""
     if installed == expected:
         print("[复用] Python 依赖已经安装。")
+        ensure_hardware_runtimes()
         return
 
     print("[首次运行 2/3] 正在安装题跋检测、PaddleOCR 和知画依赖；这可能需要较长时间……", flush=True)
@@ -215,6 +391,7 @@ def ensure_environment() -> None:
         check=True,
     )
     INSTALL_MARKER.write_text(expected, encoding="utf-8")
+    ensure_hardware_runtimes()
 
 
 def ocr_model_is_complete(path: Path) -> bool:
@@ -336,7 +513,7 @@ def wait_for_service(name: str, port: int, process: subprocess.Popen, timeout: i
     while time.monotonic() < deadline:
         health = read_health(port)
         if health and health.get("ok") is True:
-            print(f"[就绪] {name}: http://{HOST}:{port}")
+            print(f"[就绪] {name}: http://{HOST}:{WEB_PORT}")
             return
         if process.poll() is not None:
             raise RuntimeError(f"{name}启动失败，请查看日志：{LOG_DIR / (name + '.log')}")
@@ -347,7 +524,7 @@ def wait_for_service(name: str, port: int, process: subprocess.Popen, timeout: i
 def ensure_service(name: str, port: int, command: list[str], cwd: Path, timeout: int, env: dict | None = None) -> None:
     health = read_health(port)
     if health and health.get("ok") is True:
-        print(f"[复用] {name}: http://{HOST}:{port}")
+        print(f"[复用] {name}: http://{HOST}:{WEB_PORT}")
         return
     if port_is_open(port):
         raise RuntimeError(f"端口 {port} 已被其他程序占用，且不是可用的{name}服务。")
@@ -379,7 +556,7 @@ def main() -> int:
     atexit.register(cleanup)
     acquire_startup_lock()
     if sys.version_info[:2] != (3, 12):
-        raise RuntimeError("需要 64 位 Python 3.12。请安装 Python 3.12 后重新运行启动批处理。")
+        raise RuntimeError("当前解释器不是 Python 3.12。请双击“启动画基因.bat”，由启动器自动配置项目专用环境。")
     ensure_environment()
     ocr_model_path = ensure_ocr_model(
         label="书法 OCR 微调识别模型",
@@ -406,6 +583,10 @@ def main() -> int:
         url_env="OCR_ORIENTATION_MODEL_URL",
     )
     model_path = ensure_qwen_model()
+    ocr_model_path = ascii_model_alias(ocr_model_path)
+    ocr_detection_model_path = ascii_model_alias(ocr_detection_model_path)
+    ocr_orientation_model_path = ascii_model_alias(ocr_orientation_model_path)
+    model_path = ascii_model_alias(model_path)
     service_env = os.environ.copy()
     # Paddle/Qwen services import Torch on Windows.  Put the venv's native
     # libraries first so a host application's unrelated DLLs cannot shadow
@@ -417,25 +598,28 @@ def main() -> int:
         "ZHIHUA_BACKEND": "local",
         "ZHIHUA_USE_KB": "0",
         "ZHIHUA_MODEL_PATH": str(model_path),
-        "OCR_TEXT_RECOGNITION_MODEL_DIR": str(ocr_model_path),
+        # 官方 PP-OCRv5_server_rec 负责整行识别；HCSU 仅作低置信度单字备用。
+        "OCR_TEXT_RECOGNITION_MODEL_DIR": "",
+        "OCR_FALLBACK_RECOGNITION_MODEL_DIR": str(ocr_model_path),
+        "OCR_MIN_CONFIDENCE": "0.30",
+        "OCR_FALLBACK_TRIGGER_CONFIDENCE": "0.60",
         "OCR_TEXT_DETECTION_MODEL_DIR": str(ocr_detection_model_path),
         "OCR_TEXTLINE_ORIENTATION_MODEL_DIR": str(ocr_orientation_model_path),
     })
 
-    ensure_service("inscription_detector", DETECTOR_PORT, [str(VENV_PYTHON), str(ROOT / "mcp_services" / "inscription_detector" / "server.py")], ROOT, 120, service_env)
-    ensure_service("ocr", OCR_PORT, [str(VENV_PYTHON), str(ROOT / "mcp_services" / "ocr" / "server.py")], ROOT, 120, service_env)
-    ensure_service("zhihua", ZHIHUA_PORT, [str(VENV_PYTHON), str(ROOT / "mcp_services" / "zhihua" / "server.py")], ROOT, 60, service_env)
-
-    if port_is_open(WEB_PORT):
-        print(f"[复用] 网页服务: http://{HOST}:{WEB_PORT}")
+    health = read_health(WEB_PORT)
+    if health and health.get("service") == "art-genome":
+        print(f"[复用] 画基因统一服务: http://{HOST}:{WEB_PORT}")
+    elif port_is_open(WEB_PORT):
+        raise RuntimeError("端口 8000 已被旧版或其他程序占用，请关闭旧启动窗口后重试。")
     else:
-        start_process("web", [str(VENV_PYTHON), "-m", "http.server", str(WEB_PORT), "--bind", HOST], ROOT)
-        deadline = time.monotonic() + 10
-        while time.monotonic() < deadline and not port_is_open(WEB_PORT):
-            time.sleep(0.2)
-        if not port_is_open(WEB_PORT):
-            raise RuntimeError(f"网页服务启动失败，请查看日志：{LOG_DIR / 'web.log'}")
-        print(f"[就绪] 网页服务: http://{HOST}:{WEB_PORT}")
+        process = start_process("web", [str(VENV_PYTHON), str(ROOT / "local_gateway.py")], ROOT, env=service_env)
+        wait_for_service("画基因统一服务", WEB_PORT, process, 180)
+
+    print(f"[就绪] inscription_detector: http://{HOST}:{WEB_PORT}")
+    print(f"[就绪] ocr: http://{HOST}:{WEB_PORT}")
+    print(f"[就绪] zhihua: http://{HOST}:{WEB_PORT}")
+    print(f"[就绪] 网页服务: http://{HOST}:{WEB_PORT}")
 
     url = f"http://{HOST}:{WEB_PORT}/web_demo/index.html"
     print(f"\n画基因已启动：{url}")

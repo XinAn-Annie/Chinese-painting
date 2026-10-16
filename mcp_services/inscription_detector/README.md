@@ -4,14 +4,14 @@
 
 ## 启动
 
-普通用户双击项目根目录的 `启动画基因_Google.bat` 或 `启动画基因_Edge.bat`，启动器会自动安装依赖并启动此服务。首次安装完成后，也可以在项目根目录单独调试：
+普通用户双击项目根目录的 `启动画基因.bat`。启动器会自动安装依赖并启动此服务。首次安装完成后，也可以在项目根目录单独调试：
 
 ```powershell
 & '.\.venv\Scripts\python.exe' .\mcp_services\inscription_detector\server.py
 ```
 
-服务地址：`http://127.0.0.1:8005`。网页会把图片发送到 `/api/detect-inscriptions`，得到题跋框后再把每个区域发给 8004 端口的 PaddleOCR。
+服务地址：`http://127.0.0.1:8000/services/inscription-detector/`。网页得到题跋框后，再通过同一个 8000 端口把每个区域交给 PaddleOCR。
 
-模型文件 `models/inscription_detector_best.pt` 来自本项目的训练结果；数据集来源、许可和训练指标见训练目录中的说明。
+模型文件 `models/inscription_detector_best.pt` 来自本项目的训练结果，仅授权用于非商业研究和评估。训练数据集不在本仓库中分发；发布和第三方许可说明见根目录 `THIRD_PARTY_NOTICES.md`。
 
 训练集 819 张中有 260 张没有题跋标注。1281 个题跋框的中心在画面上方和左右两侧较多，底部较少；靠边的题跋也很常见。服务以模型置信度至少 0.35 作为是否送入 OCR 的门槛，位置统计仅用于安排 OCR 顺序，不硬性排除画面边缘或下方。102 张独立测试图中的 33 张无题跋标注图，在该门槛下没有触发题跋框；这不保证其他画作也没有误报。

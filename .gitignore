@@ -1,37 +1,46 @@
-# Python
-__pycache__/
-*.py[cod]
-.venv/
+# Python environments, caches and build output
+**/.venv/
+.bootstrap/
 venv/
 env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 build/
 dist/
 *.egg-info/
 
-# IDE
+# Local models, inference caches and runtime output
+.models/
+**/.offload/
+.local_logs/
+.startup.lock
+results/
+runs/
+
+# Download and installer residue
+*.whl
+*.crdownload
+*.part
+*.incomplete
+downloads/
+
+# IDE and operating-system files
 .idea/
 .vscode/
+.DS_Store
+Thumbs.db
 
 # Secrets and local settings
 .env
+.env.*
 *.key
 *API_Key*
 *API-Key*
 
-# Temporary files
+# Generic temporary files
 *.log
 *.tmp
-.offload/
-.models/
-.local_logs/
-.startup.lock
-
-# Python bytecode
-__pycache__/
-*.pyc
-
-# Local datasets and runtime outputs
-.venv/
-results/
-runs/
 
