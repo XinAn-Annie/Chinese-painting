@@ -73,6 +73,10 @@ DEFAULT_PROMPT = """请观察这幅中国画。请只依据画面中能够观察
 请用自然语言描述可见证据，不直接命名具体技法，不解释寓意、情绪或作者意图，不臆测作者、年代、真伪或题跋原文；不确定时请明确说明。"""
 
 TECHNIQUE_LABELS = ("白描", "工笔", "写意", "泼墨", "没骨")
+TECHNIQUE_CLASSIFIER_PROMPT = """只依据画面可见证据判断，不看画家名、题跋、印章。
+主类五选一：白描、工笔、没骨、写意、泼墨。
+判别：白描=只用线；工笔=线+层层上色，极精细；没骨=不用线+直接上色，柔和温润；写意=简练笔墨+较粗放，洒脱传神；泼墨=泼洒墨色+极奔放。
+将这套规则只用于五类技法相对倾向评分；证据不足时降低对应分数并在 evidence 中说明，不得凭题跋、印章或作者信息推断。"""
 TECHNIQUE_MEANING = (
     "Qwen 根据当前画面在五类技法之间分配的相对倾向，总计 100%；"
     "该数值不是识别概率，也不构成作者、年代或技法鉴定结论。"
@@ -147,7 +151,10 @@ def extract_text(message_content: object) -> str:
 
 def technique_response_contract() -> str:
     labels = "、".join(TECHNIQUE_LABELS)
-    return f"""输出格式要求：
+    return f"""五类技法评分判别规则：
+{TECHNIQUE_CLASSIFIER_PROMPT}
+
+输出格式要求：
 - 最终只输出一个合法 JSON 对象，不要使用 Markdown 代码块，也不要在 JSON 前后添加文字。
 - JSON 必须包含 `analysis`、`technique_scores`、`technique_evidence` 三个字段。
 - `analysis` 是完整的中文赏析正文；正文继续遵守上面的所有边界，不直接给出技法鉴定结论。
