@@ -1,8 +1,10 @@
 # ArtGenome / 画基因
 
-画基因是一个面向中国古画学习与视觉分析的本地交互平台。用户上传图片后，页面会执行颜色分析、题跋区域检测与 OCR、印章候选分析，并使用本地 `Qwen2.5-VL-3B-Instruct` 生成赏析和五类技法相对倾向。
+画基因是一个面向中国古画学习与视觉分析的本地交互平台。用户上传图片后，页面会执行颜色分析，匹配相似的颜色、题跋区域检测与 OCR、印章候选分析，并使用本地 `Qwen2.5-VL-3B-Instruct` 生成赏析和五类技法相对倾向。
+该程序无需任何付费，一次部署后可重复多次使用，为绘画临摹与修复、画面理解，印章分析，技法分析等提供参考。
 
 > 本项目仅授权用于非商业学习、研究和评估。项目代码见 [LICENSE](LICENSE)；Qwen、HCSU、字体和其他依赖各自适用原始许可，见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+> 本项目UI设计与前端交互由 https://github.com/18857994724 合作者完成，模型微调，后端搭建以及Debug均由本人完成。
 
 ## 已实现功能
 
@@ -10,7 +12,7 @@
 - Canvas 主色提取、K-means 聚类、传统色匹配和 Plotly 三维色彩空间。
 - 本地题跋区域检测、PaddleOCR、置信度、原图文字框和词云。
 - 印章候选标注、位置矩阵和 PNG/JSON 导出。
-- 本地 Qwen 赏析与白描、工笔、写意、泼墨、没骨五类技法相对倾向。
+- 本地 Qwen 赏析与白描、工笔、写意、泼墨、没骨五类技法相对倾向，当前程序为本地部署`Qwen2.5-VL-3B-Instruct`，完全免费且快捷，但准确率略低，用户可根据自己需求购买API获得更详细的分析材料。
 - 同一幅画追问时复用已有画面分析、OCR、颜色和技法结果，不重新识图。
 - 专业术语库依据可见证据进行约束；只有问题涉及颜色时才传递当前图片的传统色结果。
 
@@ -23,11 +25,11 @@
 - 首次运行需联网，建议预留 20 GB 空间。
 - 可选 NVIDIA GPU；8 GB 显存使用 4-bit Qwen。无 NVIDIA GPU 时回退到 CPU，生成速度会明显降低。
 
-### 推荐的手动准备（可选）
+### 推荐的手动准备（强烈建议完成）
 
 启动器可以自动配置运行环境，但为了减少首次配置失败并便于排查问题，建议用户提前从 [Python 官网 Windows 下载页](https://www.python.org/downloads/windows/) 下载并安装 **64 位 Python 3.12.x**。
 
-使用 NVIDIA 显卡的用户，建议安装与显卡驱动兼容的 **CUDA 版 PyTorch**。最简单且不会装错环境的方法是先双击 `启动画基因.bat` 完成基础环境，再双击 `安装NVIDIA加速.bat`；脚本会把 CUDA 版 PyTorch 和 GPU 版 PaddlePaddle 安装进本项目的 `.venv`。如果自行下载 PyTorch `.whl`，也必须用 `.venv\Scripts\python.exe -m pip install <wheel文件>` 安装，只有把文件下载到电脑并不会启用 GPU。具体 CUDA 版本选择以 [PyTorch 官方安装页](https://pytorch.org/get-started/locally/) 为准。
+使用 NVIDIA 显卡的用户，强烈建议安装与显卡驱动兼容的 **CUDA 版 PyTorch**。双击 `启动画基因.bat` 完成基础环境，再双击 `安装NVIDIA加速.bat`；脚本显示并CUDA 版 PyTorch 和 GPU 版 PaddlePaddle 安装进本项目的 `.venv`。建议使用Edge浏览器，用 `.venv\Scripts\python.exe -m pip install <wheel文件>` 安装，会节省2小时左右的时间，只有把文件下载到电脑并不会启用 GPU。具体 CUDA 版本选择以 `安装NVIDIA加速.bat`中显示的版本为准。
 
 没有 NVIDIA 显卡的用户不需要下载 CUDA 版 PyTorch，可以直接使用 CPU 模式。
 
