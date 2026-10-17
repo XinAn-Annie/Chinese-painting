@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet("Normal", "Repair", "Nvidia")]
     [string]$Mode = "Normal"
 )
